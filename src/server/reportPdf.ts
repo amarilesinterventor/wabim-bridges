@@ -1,7 +1,8 @@
 /**
  * Generación del informe PDF de una inspección — datos generales del puente,
  * resultados WABIM (mismo formato que la hoja "Grado de afectación" del
- * Excel de referencia) y el registro fotográfico de los daños.
+ * Excel de referencia) y las fotos de cada daño junto a su propia patología
+ * en el detalle (no agrupadas en una galería aparte al final del informe).
  *
  * Usa `pdfkit` (dibujo de página, sin dependencia de un motor de navegador).
  * Los 3 logos institucionales se incrustan como PNG (el de Unilibre se
@@ -147,6 +148,43 @@ function addLogosHeader(doc: Doc) {
 }
 
 /**
+ * Fila de miniaturas de fotos, dibujada en el punto actual del documento
+ * (con ajuste de línea si hay más fotos de las que caben). Se usa para
+ * mostrar las fotos de cada elemento/patología junto a su propio detalle,
+ * en vez de agruparlas todas en una galería al final del informe.
+ */
+function photoThumbRow(doc: Doc, photos: any[] | undefined, indent: number) {
+  if (!photos || !photos.length) return;
+  const thumbSize = 60;
+  const gap = 8;
+  const startX = PAGE_MARGIN + indent;
+  const availWidth = CONTENT_WIDTH - indent;
+  const perRow = Math.max(1, Math.floor((availWidth + gap) / (thumbSize + gap)));
+
+  ensureSpace(doc, thumbSize + 10);
+  let rowTop = doc.y + 2;
+  let col = 0;
+  for (const p of photos) {
+    if (col >= perRow) {
+      doc.y = rowTop + thumbSize + 6;
+      ensureSpace(doc, thumbSize + 10);
+      rowTop = doc.y;
+      col = 0;
+    }
+    const x = startX + col * (thumbSize + gap);
+    const filePath = join(PUBLIC_DIR, p.url);
+    try {
+      if (existsSync(filePath)) doc.image(filePath, x, rowTop, { fit: [thumbSize, thumbSize] });
+    } catch {
+      // Si una foto puntual no se puede leer/decodificar, se omite sin interrumpir el informe.
+    }
+    col++;
+  }
+  doc.y = rowTop + thumbSize + 10;
+  doc.x = PAGE_MARGIN;
+}
+
+/**
  * Foto panorámica de la estructura (si la inspección tiene alguna) como
  * banner de portada, con el nombre/código del puente superpuesto sobre una
  * franja semitransparente — para un informe con identidad visual propia de
@@ -214,8 +252,16 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
   doc.fontSize(10).font("Helvetica").fillColor("#64748b").text("Metodología WABIM (Amariles-López & Osorio-Gómez, 2023) + Manual para la Inspección Visual de Puentes y Pontones, INVÍAS (2006)", PAGE_MARGIN, doc.y, { width: CONTENT_WIDTH });
   doc.moveDown(1);
 
-  const panoramicPhoto = (insp.panoramicPhotos as any[] | undefined)?.[0];
-  if (panoramicPhoto) addPanoramicBanner(doc, panoramicPhoto.url, bridge);
+  const panoramicPhotos = (insp.panoramicPhotos as any[] | undefined) ?? [];
+  if (panoramicPhotos[0]) addPanoramicBanner(doc, panoramicPhotos[0].url, bridge);
+  // Las fotos panorámicas no están ligadas a un elemento/patología específico
+  // (por eso no encajan en el detalle por patología); la primera ya se usa
+  // como portada, y el resto se muestra aquí mismo en vez de al final.
+  if (panoramicPhotos.length > 1) {
+    doc.fontSize(8).fillColor("#94a3b8").text("Otras vistas panorámicas", PAGE_MARGIN, doc.y, { width: CONTENT_WIDTH });
+    photoThumbRow(doc, panoramicPhotos.slice(1), 0);
+    doc.moveDown(0.3);
+  }
 
   // --- Datos generales del puente ---
   sectionTitle(doc, "Datos generales del puente");
@@ -302,7 +348,7 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
     }
   }
 
-  // --- Detalle de patologías registradas ---
+  // --- Detalle de patologías registradas (con sus fotos junto a cada una) ---
   const elementsWithData = (insp.elements as any[]).filter((el) => el.subElements.some((se: any) => se.pathologies.length));
   if (elementsWithData.length) {
     sectionTitle(doc, "Detalle de patologías registradas");
@@ -311,6 +357,7 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
       doc.x = PAGE_MARGIN;
       doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e293b").text(`${el.elementDef.name}${el.label ? " — " + el.label : ""}`, PAGE_MARGIN, doc.y, { width: CONTENT_WIDTH });
       doc.font("Helvetica");
+      photoThumbRow(doc, el.photos, 0);
       for (const se of el.subElements) {
         if (!se.pathologies.length) continue;
         ensureSpace(doc, 16);
@@ -320,59 +367,12 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
           const severity = pa.dc_used === 3 ? "Alto" : pa.dc_used === 2 ? "Medio" : pa.dc_used === 1 ? "Bajo" : "—";
           const line = `${pa.pathologyDef.name} (${pa.pathology_code}): ${pa.measured_value}/${pa.total_measure} ${pa.pathologyDef.unit} -> densidad ${fmtPct(pa.density_pct)}, D.C.=${severity}, W.A.P.=${pa.wap != null ? pa.wap.toFixed(2) : "—"}`;
           doc.fontSize(8.5).fillColor("#334155").text(line, PAGE_MARGIN + 20, doc.y, { width: CONTENT_WIDTH - 20 });
+          photoThumbRow(doc, pa.photos, 20);
         }
       }
       doc.x = PAGE_MARGIN;
       doc.moveDown(0.4);
     }
-  }
-
-  // --- Registro fotográfico ---
-  const photoEntries: Array<{ url: string; caption: string }> = [];
-  for (const p of (insp.panoramicPhotos as any[]) ?? []) {
-    photoEntries.push({ url: p.url, caption: "Vista panorámica de la estructura" });
-  }
-  for (const el of insp.elements as any[]) {
-    for (const p of el.photos ?? []) {
-      photoEntries.push({ url: p.url, caption: `${el.elementDef.name}${el.label ? " — " + el.label : ""}` });
-    }
-    for (const se of el.subElements) {
-      for (const pa of se.pathologies) {
-        for (const p of pa.photos ?? []) {
-          photoEntries.push({ url: p.url, caption: `${el.elementDef.name} / ${pa.pathologyDef.name} (${pa.pathology_code})` });
-        }
-      }
-    }
-  }
-  if (photoEntries.length) {
-    sectionTitle(doc, "Registro fotográfico");
-    const thumbSize = 150;
-    const gap = 15;
-    const perRow = Math.max(1, Math.floor((CONTENT_WIDTH + gap) / (thumbSize + gap)));
-    let col = 0;
-    let rowTop = doc.y;
-    for (const photo of photoEntries) {
-      if (col === 0) {
-        ensureSpace(doc, thumbSize + 30);
-        rowTop = doc.y;
-      }
-      const x = PAGE_MARGIN + col * (thumbSize + gap);
-      const filePath = join(PUBLIC_DIR, photo.url);
-      try {
-        if (existsSync(filePath)) {
-          doc.image(filePath, x, rowTop, { fit: [thumbSize, thumbSize] });
-        }
-      } catch {
-        // Si una foto puntual no se puede leer/decodificar, se omite sin interrumpir el informe.
-      }
-      doc.fontSize(7.5).fillColor("#64748b").text(photo.caption, x, rowTop + thumbSize + 3, { width: thumbSize });
-      col++;
-      if (col >= perRow) {
-        col = 0;
-        doc.y = rowTop + thumbSize + 20;
-      }
-    }
-    if (col !== 0) doc.y = rowTop + thumbSize + 20;
   }
 
   // --- Pie de página con numeración ---
