@@ -153,10 +153,9 @@ function addLogosHeader(doc: Doc) {
  * mostrar las fotos de cada elemento/patología junto a su propio detalle,
  * en vez de agruparlas todas en una galería al final del informe.
  */
-function photoThumbRow(doc: Doc, photos: any[] | undefined, indent: number) {
+function photoThumbRow(doc: Doc, photos: any[] | undefined, indent: number, thumbSize = 150) {
   if (!photos || !photos.length) return;
-  const thumbSize = 60;
-  const gap = 8;
+  const gap = 15;
   const startX = PAGE_MARGIN + indent;
   const availWidth = CONTENT_WIDTH - indent;
   const perRow = Math.max(1, Math.floor((availWidth + gap) / (thumbSize + gap)));
