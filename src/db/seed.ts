@@ -6,6 +6,7 @@
  * Uso:  npm run seed
  */
 import { scryptSync, randomBytes } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { db, newId, transaction } from "./db.js";
 import { WABIM_CATALOG } from "../wabim/catalog.js";
 import { runWabimCalculation } from "../wabim/engine.js";
@@ -331,7 +332,7 @@ function persistInspectionInput(
   );
 }
 
-function main() {
+export function main() {
   transaction(() => {
     seedCatalog();
     const users = seedUsers();
@@ -343,4 +344,10 @@ function main() {
   console.log("\nSemilla completada con éxito.");
 }
 
-main();
+// Solo se auto-ejecuta cuando el archivo se corre directamente (`npm run seed`),
+// no cuando otro módulo lo importa (p.ej. server.ts para la auto-siembra en
+// hosting sin disco persistente, ver runSeedIfEmpty en ese archivo).
+const isRunDirectly = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isRunDirectly) {
+  main();
+}

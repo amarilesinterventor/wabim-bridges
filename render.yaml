@@ -1,0 +1,31 @@
+# Blueprint de despliegue para Render (render.com).
+#
+# Nivel "free": sin disco persistente, así que la base de datos SQLite y las
+# fotos subidas se reinician en cada redeploy/reinicio del servicio. El
+# servidor detecta esto y vuelve a cargar el catálogo WABIM/INVÍAS y los
+# datos de ejemplo automáticamente (ver autoSeedIfEmpty en src/server/server.ts),
+# así que la app siempre arranca funcional aunque los datos no persistan.
+#
+# Para tener persistencia real (datos e imágenes que no se borren), hay que
+# pasar a un plan pago y agregar un disco (ver comentario al final).
+services:
+  - type: web
+    name: wabim-bridges
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+
+# --- Para agregar persistencia (plan pago, ~$7/mes + disco) ---
+# services:
+#   - type: web
+#     ...
+#     plan: starter
+#     disk:
+#       name: wabim-data
+#       mountPath: /opt/render/project/src/data
+#       sizeGB: 1

@@ -73,6 +73,29 @@ ejemplo (creadas por `npm run seed`):
 | inspector@wabim.local      | inspector123    | INSPECTOR    |
 | coordinador@wabim.local    | coordinador123  | COORDINATOR  |
 
+## Despliegue en la nube (Render, nivel gratis)
+
+El proyecto incluye un [`render.yaml`](render.yaml) listo para desplegar en
+[Render](https://render.com) sin configuración adicional:
+
+1. Entra a [render.com](https://render.com) e inicia sesión / crea una cuenta (gratis).
+2. "New" → "Blueprint" → conecta este repositorio de GitHub.
+3. Render detecta `render.yaml` automáticamente y crea el servicio (plan **Free**).
+4. Espera el build (2-3 min) y abre la URL que te asigna (`https://wabim-bridges-xxxx.onrender.com`).
+
+**Importante — nivel gratis sin disco persistente:** el plan Free de Render
+no incluye almacenamiento persistente, así que la base de datos SQLite y las
+fotos subidas **se reinician** cada vez que el servicio se redespliega o se
+reinicia (p.ej. tras dormirse por inactividad). Para que la app siempre
+arranque funcional, el servidor detecta si la base de datos está vacía y
+recarga automáticamente el catálogo WABIM/INVÍAS y los datos de ejemplo (ver
+`autoSeedIfEmpty` en `src/server/server.ts`) — pero cualquier puente,
+inspección o foto que hayas agregado tú se perderá en el próximo reinicio.
+
+Para tener persistencia real (que los datos no se borren), hay que pasar a
+un plan pago (~USD 7/mes) y agregar un disco — la plantilla comentada al
+final de `render.yaml` muestra cómo.
+
 ### Pruebas unitarias del motor de cálculo
 
 ```bash

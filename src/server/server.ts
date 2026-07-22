@@ -43,6 +43,7 @@ import {
   listUsers,
 } from "../db/queries.js";
 import { calculateAndPersist } from "./wabimService.js";
+import { main as runSeed } from "../db/seed.js";
 import { buildInspectionReportPdf } from "./reportPdf.js";
 import { verifyPassword, signToken, verifyToken, extractBearerToken } from "./auth.js";
 
@@ -384,6 +385,21 @@ const server = createServer(async (req, res) => {
     sendJson(res, 500, { error: err.message ?? "Error interno del servidor." });
   }
 });
+
+// Auto-siembra: en hosting sin disco persistente (p.ej. el nivel gratis de
+// Render) el archivo SQLite se reinicia vacío en cada despliegue/reinicio.
+// Para que la app funcione igual sin depender de correr "npm run seed" a
+// mano cada vez, si arranca sin puentes se siembra automáticamente aquí.
+function autoSeedIfEmpty() {
+  if (listBridges().length > 0) return;
+  console.log("Base de datos vacía — cargando catálogo y datos de ejemplo automáticamente...");
+  try {
+    runSeed();
+  } catch (err) {
+    console.error("Fallo la auto-siembra:", err);
+  }
+}
+autoSeedIfEmpty();
 
 server.listen(PORT, () => {
   console.log(`\n  WABIM Bridges — servidor de demostración`);
