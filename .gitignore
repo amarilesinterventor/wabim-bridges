@@ -1,0 +1,7 @@
+node_modules/
+dist/
+data/*.sqlite
+public/uploads/
+*.log
+.DS_Store
+.claude/settings.local.json

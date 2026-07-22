@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Detalle del puente — Inspección Visual de Puentes y Pontones WABIM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/critical.css" />
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <nav id="nav" class="bg-white border-b border-slate-200 sticky top-0 z-10"></nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <a href="/index.html" class="text-sm text-indigo-600 hover:underline">← Inventario de puentes</a>
+
+    <div id="bridgeHeader" class="mt-4 mb-8"></div>
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-slate-800">Inspecciones</h2>
+      <button id="newInspectionBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg px-4 py-2.5">+ Programar inspección</button>
+    </div>
+    <div id="inspectionList" class="grid gap-3"></div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <div id="newInspectionModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+      <h2 class="text-lg font-semibold text-slate-800 mb-4">Programar inspección</h2>
+      <form id="newInspectionForm" class="grid grid-cols-2 gap-3 text-sm">
+        <label>Fecha programada<input name="scheduledDate" type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label>Prioridad
+          <select name="priority" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option value="LOW">Baja</option>
+            <option value="MEDIUM" selected>Media</option>
+            <option value="HIGH">Alta</option>
+            <option value="URGENT">Urgente</option>
+          </select>
+        </label>
+        <label class="col-span-2">Notas<textarea name="notes" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" rows="2"></textarea></label>
+        <div class="col-span-2 flex justify-end gap-2 mt-2">
+          <button type="button" id="cancelNewInspection" class="px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    renderNav();
+    renderFooter();
+    const bridgeId = new URLSearchParams(window.location.search).get("id");
+
+    async function load() {
+      const { bridge } = await api(`/bridges/${bridgeId}`);
+      document.getElementById("bridgeHeader").innerHTML = `
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex items-start justify-between">
+            <div>
+              <h1 class="text-2xl font-semibold text-slate-800">${escapeHtml(bridge.name)}</h1>
+              <div class="text-sm text-slate-500 mt-1">${escapeHtml(bridge.code)} · ${escapeHtml(bridge.municipality || "")}, ${escapeHtml(bridge.department || "")}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-sm">
+            <div><div class="text-slate-400 text-xs">Tipo transversal</div><div>${escapeHtml(bridge.structural_type_transverse || "—")}</div></div>
+            <div><div class="text-slate-400 text-xs">Tipo longitudinal</div><div>${escapeHtml(bridge.structural_type_longitudinal || "—")}</div></div>
+            <div><div class="text-slate-400 text-xs">Longitud / Ancho</div><div>${bridge.length ?? "—"} m / ${bridge.width ?? "—"} m</div></div>
+            <div><div class="text-slate-400 text-xs">Año construcción</div><div>${bridge.construction_year ?? "—"}</div></div>
+            <div><div class="text-slate-400 text-xs">Material</div><div>${escapeHtml(bridge.material || "—")}</div></div>
+            <div><div class="text-slate-400 text-xs">Propietario</div><div>${escapeHtml(bridge.owner || "—")}</div></div>
+            <div><div class="text-slate-400 text-xs">Coordenadas</div><div>${bridge.latitude ?? "—"}, ${bridge.longitude ?? "—"}</div></div>
+            <div><div class="text-slate-400 text-xs"># de luces</div><div>${bridge.number_of_spans ?? "—"}</div></div>
+          </div>
+          ${bridge.notes ? `<div class="mt-4 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">${escapeHtml(bridge.notes)}</div>` : ""}
+        </div>
+      `;
+
+      const listEl = document.getElementById("inspectionList");
+      if (bridge.inspections.length === 0) {
+        listEl.innerHTML = `<div class="text-sm text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">Sin inspecciones registradas todavía.</div>`;
+        return;
+      }
+      listEl.innerHTML = bridge.inspections
+        .map((i) => {
+          const badge = i.dta != null ? conditionBadge(i.condition, `DTA ${fmtPct(i.dta)}`) : `<span class="text-xs text-slate-400">Sin calcular</span>`;
+          return `
+          <div class="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition">
+            <div class="flex items-center justify-between">
+              <a href="/inspection.html?id=${i.id}" class="flex-1">
+                <div class="font-medium text-slate-800">Inspección ${i.executed_date || i.scheduled_date || "(sin fecha)"} </div>
+                <div class="text-xs text-slate-500 mt-1">Estado: ${i.status} · Prioridad: ${i.priority}</div>
+              </a>
+              <div class="flex items-center gap-3">
+                ${badge}
+                <a href="/api/inspections/${i.id}/report.pdf" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline shrink-0">↓ PDF</a>
+              </div>
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+    }
+
+    document.getElementById("newInspectionBtn").addEventListener("click", () => {
+      openModal(document.getElementById("newInspectionModal"));
+    });
+    document.getElementById("cancelNewInspection").addEventListener("click", () => {
+      closeModal(document.getElementById("newInspectionModal"));
+    });
+    document.getElementById("newInspectionForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      const { inspection } = await api(`/bridges/${bridgeId}/inspections`, { method: "POST", body: JSON.stringify(payload) });
+      window.location.href = `/inspection.html?id=${inspection.id}`;
+    });
+
+    load();
+  </script>
+</body>
+</html>

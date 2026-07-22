@@ -1,0 +1,27 @@
+{
+  "name": "wabim-bridges",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de Evaluación del Estado de Puentes mediante Inspección Visual (metodología WABIM + Manual INVÍAS).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server/server.ts",
+    "start": "node dist/server/server.js",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/db && cp src/db/schema.sql dist/db/schema.sql",
+    "seed": "tsx src/db/seed.ts",
+    "seed:reset": "rm -f data/wabim.sqlite && npm run seed",
+    "test": "tsx --test src/wabim/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.17.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "pdfkit": "^0.19.1"
+  }
+}

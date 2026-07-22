@@ -1,0 +1,397 @@
+// =============================================================================
+// WABIM Bridges — Modelo de datos (PostgreSQL + Prisma)
+// =============================================================================
+// Este esquema es el modelo de datos "objetivo" de la arquitectura solicitada
+// (Next.js/NestJS + PostgreSQL + Prisma). El servidor de demostración incluido
+// en este entregable (src/server) usa una versión equivalente en SQLite
+// (src/db/schema.sql) porque el entorno de esta sesión no tiene acceso a
+// internet para descargar el motor de Prisma; el motor de cálculo (src/wabim)
+// es idéntico en ambos casos y no requiere ningún cambio al migrar.
+//
+// Para usar este esquema en un proyecto Next.js/NestJS real:
+//   1. npm install prisma @prisma/client
+//   2. Copiar este archivo a prisma/schema.prisma
+//   3. Configurar DATABASE_URL apuntando a PostgreSQL
+//   4. npx prisma migrate dev --name init
+//   5. Ejecutar prisma/seed.ts (traducción directa de src/wabim/catalog.ts)
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Autenticación y usuarios
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN // Administra catálogo, coeficientes, usuarios
+  COORDINATOR // Planifica inspecciones, asigna inspectores
+  INSPECTOR // Ejecuta inspecciones de campo
+  CONSULTANT // Analista / consultor externo, acceso amplio de solo lectura + reportes
+  CLIENT // Cliente / entidad propietaria, acceso a sus puentes
+  READONLY // Modo solo lectura genérico
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(INSPECTOR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  inspectionsAsInspector Inspection[] @relation("InspectorInspections")
+  inspectionsAsCoordinator Inspection[] @relation("CoordinatorInspections")
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Inventario de puentes
+// -----------------------------------------------------------------------------
+
+model Bridge {
+  id                String   @id @default(cuid())
+  code              String   @unique // Código interno / INVÍAS
+  name              String
+  municipality      String
+  department        String
+  latitude          Float?
+  longitude         Float?
+  route             String? // Código de vía INVÍAS
+  km                Float? // Punto de referencia (abscisa)
+  structuralTypeTransverse String? // Tabla 2 Manual INVÍAS (Losa sobre vigas, Armadura, Arco, etc.)
+  structuralTypeLongitudinal String? // Tabla 3 Manual INVÍAS (simplemente apoyadas, continuas, colgante, etc.)
+  numberOfSpans     Int?
+  length            Float? // m
+  width             Float? // m
+  gauge             Float? // gálibo, m
+  material          String?
+  constructionYear  Int?
+  owner             String?
+  entity            String?
+  notes             String?
+  mainPhotoUrl      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  documents   BridgeDocument[]
+  inspections Inspection[]
+
+  @@index([department, municipality])
+  @@map("bridges")
+}
+
+model BridgeDocument {
+  id        String   @id @default(cuid())
+  bridgeId  String
+  bridge    Bridge   @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  type      String? // plano, contrato, estudio previo, etc.
+  createdAt DateTime @default(now())
+
+  @@map("bridge_documents")
+}
+
+// -----------------------------------------------------------------------------
+// Programación y ejecución de inspecciones
+// -----------------------------------------------------------------------------
+
+enum InspectionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Inspection {
+  id            String             @id @default(cuid())
+  bridgeId      String
+  bridge        Bridge             @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime?
+  executedDate  DateTime?
+  time          String?
+  weather       String?
+  equipment     String? // equipos usados (cámara, fisurómetro, etc.)
+  status        InspectionStatus   @default(SCHEDULED)
+  priority      InspectionPriority @default(MEDIUM)
+  notes         String?
+
+  inspectorId    String?
+  inspector      User?   @relation("InspectorInspections", fields: [inspectorId], references: [id])
+  coordinatorId  String?
+  coordinator    User?   @relation("CoordinatorInspections", fields: [coordinatorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  elements        InspectionElement[]
+  subCategoryResults SubCategoryResult[]
+  result          InspectionResult?
+
+  @@index([bridgeId])
+  @@map("inspections")
+}
+
+// -----------------------------------------------------------------------------
+// Catálogo WABIM / INVÍAS — Subcategorías, Elementos, Sub-elementos, Patologías
+// Los coeficientes (cec/ec/ic) y los umbrales (lowMax/highMin) son editables
+// por el administrador. Cuando se recalcula una inspección, los valores
+// efectivamente usados se "congelan" (snapshot) en los modelos de resultado
+// (ver icUsed/ecUsed/cecUsed/lowMaxUsed/highMinUsed) para preservar la
+// trazabilidad histórica aunque el catálogo cambie después.
+// -----------------------------------------------------------------------------
+
+enum CatalogSource {
+  WABIM // valor tomado literalmente del artículo científico
+  INVIAS // definido en el Manual INVÍAS, coeficiente reutilizado por afinidad
+  EXTENSION // propuesto para cubrir el Manual INVÍAS íntegramente; auditar/calibrar
+}
+
+enum MeasurementUnit {
+  ML // metros lineales
+  M2 // metros cuadrados
+  UNIDAD // conteo de unidades/elementos afectados
+  PORCENTAJE
+  MM
+}
+
+model SubCategory {
+  code   String  @id // SURFACE_EQUIPMENT | SUBSTRUCTURE | CONCRETE_SUPERSTRUCTURE | STEEL_SUPERSTRUCTURE
+  name   String
+  cec    Float // Coeficiente de Elemento Categórico (Tabla 3 WABIM) — editable
+  source CatalogSource @default(WABIM)
+
+  elements            ElementType[]
+  subCategoryResults  SubCategoryResult[]
+
+  @@map("wabim_subcategories")
+}
+
+model ElementType {
+  code          String        @id
+  name          String
+  subCategoryCode String
+  subCategory   SubCategory   @relation(fields: [subCategoryCode], references: [code])
+  ec            Float // Coeficiente de Elemento (Tabla 2 WABIM) — editable
+  source        CatalogSource @default(WABIM)
+  inviasRef     String? // referencia a la sección del Manual INVÍAS
+
+  subElements        SubElementType[]
+  inspectionElements InspectionElement[]
+
+  @@map("wabim_elements")
+}
+
+model SubElementType {
+  code           String          @id
+  name           String
+  elementCode    String
+  element        ElementType     @relation(fields: [elementCode], references: [code])
+  ic             Float // Coeficiente de Importancia (Tabla 1 WABIM) — editable
+  unit           MeasurementUnit
+  source         CatalogSource   @default(WABIM)
+  inviasRef      String?
+
+  pathologyTypes        PathologyType[]
+  inspectionSubElements InspectionSubElement[]
+
+  @@map("wabim_subelements")
+}
+
+model PathologyType {
+  code          String          @id // convención de códigos del Manual INVÍAS (FIF, COL, SOC, ...)
+  name          String
+  subElementCode String
+  subElement    SubElementType  @relation(fields: [subElementCode], references: [code])
+  unit          MeasurementUnit
+  lowMax        Float // límite superior del rango "Bajo" (Tabla 6 WABIM) — editable
+  highMin       Float // límite inferior del rango "Alto" (Tabla 6 WABIM) — editable
+  source        CatalogSource   @default(WABIM)
+  note          String?
+
+  records PathologyRecord[]
+
+  @@map("wabim_pathology_types")
+}
+
+// -----------------------------------------------------------------------------
+// Captura de campo: elementos / sub-elementos / patologías de una inspección
+// -----------------------------------------------------------------------------
+
+model InspectionElement {
+  id            String     @id @default(cuid())
+  inspectionId  String
+  inspection    Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  elementCode   String
+  element       ElementType @relation(fields: [elementCode], references: [code])
+  label         String? // p.ej. "Pila 1", "Entrada"
+  dimensions    String? // texto libre / JSON
+  quantity      Int?
+  material      String?
+  condition     String?
+  location      String?
+  mainPhotoUrl  String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  subElements InspectionSubElement[]
+  photos      Photo[]
+  result      ElementResult?
+
+  @@index([inspectionId])
+  @@map("inspection_elements")
+}
+
+model InspectionSubElement {
+  id                   String             @id @default(cuid())
+  inspectionElementId  String
+  inspectionElement    InspectionElement  @relation(fields: [inspectionElementId], references: [id], onDelete: Cascade)
+  subElementCode       String
+  subElementType       SubElementType     @relation(fields: [subElementCode], references: [code])
+  icUsed               Float // snapshot del I.C. usado en el cálculo
+  label                String?
+
+  pathologies PathologyRecord[]
+
+  @@map("inspection_subelements")
+}
+
+// `totalMeasure` vive en PathologyRecord (no en InspectionSubElement): el
+// Anexo C [INVIAS] asigna unidades distintas a patologías de un mismo
+// sub-elemento (p.ej. en "Diseño" de un elemento de concreto, Aplastamiento
+// local se cuantifica en "unidad" pero Fisuras por flexión en "ml"), así que
+// un total compartido por sub-elemento mezclaría unidades incompatibles en
+// la Ecuación 1.
+model PathologyRecord {
+  id                     String               @id @default(cuid())
+  inspectionSubElementId String
+  inspectionSubElement   InspectionSubElement @relation(fields: [inspectionSubElementId], references: [id], onDelete: Cascade)
+  pathologyCode          String
+  pathologyType          PathologyType        @relation(fields: [pathologyCode], references: [code])
+
+  measuredValue Float // numerador Ec. 1
+  totalMeasure  Float // dimensión total de referencia (denominador Ec. 1), en la unidad propia de esta patología
+  description   String?
+  location      String?
+  extent        String?
+  quantity      Float?
+  length        Float?
+  area          Float?
+  depth         Float?
+  width         Float?
+  affectationLevel String?
+  notes         String?
+
+  // --- resultados calculados (snapshot para auditoría) ---
+  densityPct    Float?
+  dcUsed        Int? // Coeficiente de Densidad resuelto (1/2/3)
+  icUsed        Float?
+  wap           Float?
+  lowMaxUsed    Float?
+  highMinUsed   Float?
+  calculatedAt  DateTime?
+
+  photos Photo[]
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionSubElementId])
+  @@map("pathology_records")
+}
+
+// -----------------------------------------------------------------------------
+// Registro fotográfico
+// -----------------------------------------------------------------------------
+
+model Photo {
+  id                   String   @id @default(cuid())
+  url                  String
+  caption              String?
+  latitude             Float?
+  longitude            Float?
+  takenAt              DateTime?
+  annotations          String? // JSON con flechas/círculos/etiquetas (editor cliente)
+
+  inspectionElementId  String?
+  inspectionElement    InspectionElement? @relation(fields: [inspectionElementId], references: [id], onDelete: Cascade)
+  pathologyRecordId    String?
+  pathologyRecord      PathologyRecord?   @relation(fields: [pathologyRecordId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("photos")
+}
+
+// -----------------------------------------------------------------------------
+// Resultados del cálculo WABIM (con trazabilidad completa)
+// -----------------------------------------------------------------------------
+
+model ElementResult {
+  id                  String            @id @default(cuid())
+  inspectionElementId String            @unique
+  inspectionElement   InspectionElement @relation(fields: [inspectionElementId], references: [id], onDelete: Cascade)
+  ecUsed              Float
+  dae                 Float // Ecuación 3
+  sumWap              Float
+  sumDcIc             Float
+  hasData             Boolean
+  calculatedAt         DateTime @default(now())
+
+  @@map("element_results")
+}
+
+model SubCategoryResult {
+  id             String      @id @default(cuid())
+  inspectionId   String
+  inspection     Inspection  @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  subCategoryCode String
+  subCategory    SubCategory @relation(fields: [subCategoryCode], references: [code])
+  cecUsed        Float
+  dasc           Float // Ecuación 4
+  sumDaeEc       Float
+  sumEc          Float
+  hasData        Boolean
+  calculatedAt   DateTime @default(now())
+
+  @@unique([inspectionId, subCategoryCode])
+  @@map("subcategory_results")
+}
+
+enum BridgeCondition {
+  SIN_DETERIORO
+  DETERIORO_BAJO
+  DETERIORO_MODERADO
+  DETERIORO_MEDIO_ALTO
+  DETERIORO_ALTO
+}
+
+model InspectionResult {
+  id            String          @id @default(cuid())
+  inspectionId  String          @unique
+  inspection    Inspection      @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  dta           Float // Ecuación 5 — Grado de Afectación Total (%)
+  sumDascCec    Float
+  sumCec        Float
+  condition     BridgeCondition
+  recommendation String
+  calculatedAt  DateTime @default(now())
+
+  @@map("inspection_results")
+}

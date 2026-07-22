@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Inspección — Inspección Visual de Puentes y Pontones WABIM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/critical.css" />
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <nav id="nav" class="bg-white border-b border-slate-200 sticky top-0 z-10"></nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8 pb-24">
+    <div id="crumb" class="text-sm mb-4"></div>
+
+    <div id="header" class="bg-white rounded-xl border border-slate-200 p-6 mb-6"></div>
+
+    <div id="resultSummary" class="mb-6"></div>
+
+    <div id="afectacionSection" class="mb-10 hidden">
+      <h2 class="text-lg font-semibold text-slate-800 mb-1">Grado de afectación</h2>
+      <p class="text-xs text-slate-500 mb-4">Mismo formato de presentación que la hoja "Grado de afectación" de la herramienta de referencia en Excel: porcentaje por elemento, por subcategoría y total, cada uno con su gráfica de barras.</p>
+      <div id="afectacionPorElemento" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4"></div>
+      <div id="afectacionPorCategoria"></div>
+    </div>
+
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-slate-800">Elementos inspeccionados</h2>
+      <div class="flex gap-2">
+        <button id="addElementBtn" class="bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5">+ Agregar elemento</button>
+        <button id="calculateBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg px-4 py-2.5">Calcular WABIM</button>
+      </div>
+    </div>
+
+    <div id="elementsList" class="space-y-4"></div>
+
+    <div id="traceSection" class="mt-10 hidden">
+      <h2 class="text-lg font-semibold text-slate-800 mb-3">Trazabilidad del cálculo (12 pasos)</h2>
+      <ol id="stepsList" class="text-sm text-slate-600 space-y-1 list-decimal list-inside bg-white border border-slate-200 rounded-xl p-5"></ol>
+
+      <h2 class="text-lg font-semibold text-slate-800 mb-3 mt-6">Detalle por subcategoría (Ecuaciones 3, 4 y 5)</h2>
+      <div id="traceDetail" class="space-y-4"></div>
+    </div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <!-- Modal: agregar elemento -->
+  <div id="addElementModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <h2 class="text-lg font-semibold text-slate-800 mb-4">Agregar elemento del puente</h2>
+      <form id="addElementForm" class="space-y-3 text-sm">
+        <label class="block">Elemento (Manual INVÍAS / Tabla 2 WABIM)
+          <select name="elementCode" id="elementCodeSelect" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></select>
+        </label>
+        <label class="block">Etiqueta / ubicación (opcional)
+          <input name="label" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="p.ej. Pila 1, Entrada" />
+        </label>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" id="cancelAddElement" class="px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white">Agregar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: agregar sub-elemento -->
+  <div id="addSubElementModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <h2 class="text-lg font-semibold text-slate-800 mb-4">Agregar sub-elemento</h2>
+      <form id="addSubElementForm" class="space-y-3 text-sm">
+        <input type="hidden" name="inspectionElementId" />
+        <label class="block">Sub-elemento (Tabla 1 WABIM — Coeficiente de Importancia I.C.)
+          <select name="subElementCode" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></select>
+        </label>
+        <label class="block">Etiqueta (opcional) <span class="text-slate-400">p.ej. "Entrada", "Junta 1"</span>
+          <input name="label" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </label>
+        <p class="text-xs text-slate-400">La dimensión total y el valor medido de cada daño se registran al agregar cada patología (Anexo C INVÍAS: cada patología puede tener su propia unidad de cuantificación, p.ej. ml, m2 o unidad).</p>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" class="cancel-modal px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white">Agregar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: agregar patología -->
+  <div id="addPathologyModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+      <h2 class="text-lg font-semibold text-slate-800 mb-4">Registrar patología</h2>
+      <form id="addPathologyForm" class="space-y-3 text-sm">
+        <input type="hidden" name="inspectionSubElementId" />
+        <label class="block">Patología (Manual INVÍAS Anexo C / Tabla 6 WABIM)
+          <select name="pathologyCode" id="pathologyCodeSelect" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></select>
+        </label>
+        <label class="block">Dimensión del elemento <span class="text-slate-400">(denominador Ec. 1, en <span id="totalMeasureUnit">—</span>)</span>
+          <input name="totalMeasure" type="number" step="any" min="0.0001" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </label>
+        <label class="block">Dimensión de la patología <span class="text-slate-400">(numerador Ec. 1, en <span id="measuredValueUnit">—</span>)</span>
+          <input name="measuredValue" type="number" step="any" min="0" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+        </label>
+        <label class="block">Descripción<input name="description" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="block" id="locationFieldLabel">Ubicación
+          <div id="locationFieldContainer"></div>
+        </label>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" class="cancel-modal px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white">Registrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    renderNav();
+    renderFooter();
+    const inspectionId = new URLSearchParams(window.location.search).get("id");
+    let catalog = null;
+    let inspection = null;
+
+    function subElementsFor(elementCode) {
+      return catalog.subElements.filter((se) => se.elementCode === elementCode);
+    }
+    // Señalización: el Manual INVÍAS (§2.4.6) presenta las 6 patologías (IL, RR, FA,
+    // DD, IVN, AE) como una sola lista aplicable "tanto a señales horizontales como
+    // verticales", sin restringir cuáles van con cuáles. Por eso, al elegir Horizontal
+    // o Vertical, se muestran las patologías de AMBOS sub-elementos (Reductores queda aparte).
+    const SHARED_PATHOLOGY_SUBELEMENTS = {
+      SIGNALING__HORIZONTAL: ["SIGNALING__HORIZONTAL", "SIGNALING__VERTICAL"],
+      SIGNALING__VERTICAL: ["SIGNALING__HORIZONTAL", "SIGNALING__VERTICAL"],
+    };
+    function pathologiesFor(subElementCode) {
+      const codes = SHARED_PATHOLOGY_SUBELEMENTS[subElementCode] ?? [subElementCode];
+      return catalog.pathologyTypes.filter((p) => codes.includes(p.subElementCode));
+    }
+
+    // Ubicación: convenciones cerradas del Manual INVÍAS por elemento (Celda 1 de cada
+    // formato de captura, §2.4.x). Los elementos de concreto/metálicos no tienen un
+    // listado cerrado (se identifican "de acuerdo con el esquema realizado"), así que
+    // no aparecen aquí y el campo queda como texto libre ("Otro").
+    const LOCATION_OPTIONS_BY_ELEMENT = {
+      EXPANSION_JOINTS: [
+        { value: "E", label: "E — Entrada de la estructura" },
+        { value: "S", label: "S — Salida" },
+        { value: "I", label: "I — Intermedia" },
+      ],
+      SIDEWALKS_CURBS: [
+        { value: "CD", label: "CD — Costado derecho" },
+        { value: "CI", label: "CI — Costado izquierdo" },
+        { value: "AC", label: "AC — Ambos costados" },
+      ],
+      RAILINGS: [
+        { value: "CD", label: "CD — Costado derecho" },
+        { value: "CI", label: "CI — Costado izquierdo" },
+      ],
+      SIGNALING: [
+        { value: "CD", label: "CD — Costado derecho" },
+        { value: "CI", label: "CI — Costado izquierdo" },
+        { value: "E", label: "E — Entrada del puente" },
+        { value: "S", label: "S — Salida del puente" },
+        { value: "I", label: "I — Intermedia" },
+      ],
+      DRAINAGE: [
+        { value: "CD", label: "CD — Costado derecho" },
+        { value: "CI", label: "CI — Costado izquierdo" },
+      ],
+    };
+
+    function groupElementsBySubcategory() {
+      const groups = {};
+      for (const sc of catalog.subCategories) groups[sc.code] = { name: sc.name, items: [] };
+      for (const el of catalog.elements) groups[el.subCategory]?.items.push(el);
+      return groups;
+    }
+
+    async function loadAll() {
+      catalog = await api("/catalog");
+      const { inspection: insp } = await api(`/inspections/${inspectionId}`);
+      inspection = insp;
+      render();
+    }
+
+    function render() {
+      document.getElementById("crumb").innerHTML = `<a href="/bridge.html?id=${inspection.bridge_id}" class="text-indigo-600 hover:underline">← ${escapeHtml(inspection.bridge.name)}</a>`;
+      document.getElementById("header").innerHTML = `
+        <div class="flex items-start justify-between">
+          <div>
+            <h1 class="text-xl font-semibold text-slate-800">Inspección — ${escapeHtml(inspection.bridge.name)}</h1>
+            <div class="text-sm text-slate-500 mt-1">
+              Programada: ${inspection.scheduled_date || "—"} · Ejecutada: ${inspection.executed_date || "—"} ·
+              Clima: ${escapeHtml(inspection.weather || "—")} · Estado: ${inspection.status}
+            </div>
+          </div>
+          <a href="/api/inspections/${inspectionId}/report.pdf" target="_blank" rel="noopener"
+             class="shrink-0 bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5 text-slate-700">
+            ↓ Descargar informe PDF
+          </a>
+        </div>
+      `;
+
+      renderResultSummary();
+      renderElements();
+      populateElementSelect();
+    }
+
+    function renderResultSummary() {
+      const el = document.getElementById("resultSummary");
+      if (!inspection.result) {
+        el.innerHTML = `<div class="text-sm text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl p-4">Aún no se ha calculado el índice WABIM de esta inspección. Agrega elementos y patologías, luego presiona "Calcular WABIM".</div>`;
+        return;
+      }
+      const r = inspection.result;
+      el.innerHTML = `
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex flex-wrap items-center gap-6">
+            <div>
+              <div class="text-xs text-slate-400 uppercase tracking-wide">Grado de afectación total de la estructura (D.T.A.)</div>
+              <div class="text-3xl font-bold text-slate-800">${fmtPct(r.dta)}</div>
+            </div>
+            <div>${conditionBadge(r.condition, r.condition.replaceAll("_", " "))}</div>
+            <div class="text-sm text-slate-600 max-w-md">${escapeHtml(r.recommendation)}</div>
+          </div>
+          <div class="mt-3">${barRow("Total estructura", r.dta)}</div>
+        </div>
+      `;
+    }
+
+    // Subcategoría con mayor Grado de Afectación (D.A.S.C.) entre las
+    // inspeccionadas — equivalente a la fila "Con énfasis en:" de la hoja
+    // "Grado de afectación" del Excel de referencia, que señala cuál
+    // subconjunto concentra el problema cuando la condición general es mala.
+    function worstSubCategory(subCategories) {
+      const withData = subCategories.filter((sc) => sc.hasData);
+      if (!withData.length) return null;
+      return withData.reduce((worst, sc) => (sc.dasc > worst.dasc ? sc : worst));
+    }
+
+    function renderGradoAfectacion(result) {
+      const section = document.getElementById("afectacionSection");
+      section.classList.remove("hidden");
+
+      document.getElementById("afectacionPorElemento").innerHTML = result.subCategories
+        .map((sc) => {
+          if (!sc.hasData) {
+            return `<div class="bg-white rounded-xl border border-slate-200 p-5 opacity-60">
+              <h3 class="font-medium text-slate-700">${escapeHtml(sc.subCategoryName)} <span class="text-xs text-slate-400 font-normal">(C.E.C.=${sc.cec})</span></h3>
+              <div class="text-xs text-slate-400 mt-2">Sin elementos inspeccionados en esta subcategoría.</div>
+            </div>`;
+          }
+          const rows = sc.elements
+            .filter((e) => e.hasData)
+            .map((e) => barRow(e.elementName, e.dae))
+            .join("");
+          return barChartCard(sc.subCategoryName, `C.E.C.=${sc.cec}`, rows);
+        })
+        .join("");
+
+      const worst = worstSubCategory(result.subCategories);
+      const categoryRows = result.subCategories.map((sc) => barRow(sc.subCategoryName, sc.dasc)).join("");
+      document.getElementById("afectacionPorCategoria").innerHTML =
+        barChartCard("Grado de afectación por categoría", null, categoryRows) +
+        (worst
+          ? `<div class="text-sm text-slate-600 mt-3"><strong>Mayor grado de afectación en:</strong> ${escapeHtml(worst.subCategoryName)} (${fmtPct(worst.dasc)})</div>`
+          : "");
+    }
+
+    function populateElementSelect() {
+      const select = document.getElementById("elementCodeSelect");
+      const groups = groupElementsBySubcategory();
+      select.innerHTML = Object.entries(groups)
+        .map(
+          ([code, g]) => `
+        <optgroup label="${escapeHtml(g.name)}">
+          ${g.items.map((e) => `<option value="${e.code}">${escapeHtml(e.name)} (E.C.=${e.ec}${e.source !== "WABIM" ? ", " + e.source : ""})</option>`).join("")}
+        </optgroup>
+      `,
+        )
+        .join("");
+    }
+
+    function renderElements() {
+      const listEl = document.getElementById("elementsList");
+      if (inspection.elements.length === 0) {
+        listEl.innerHTML = `<div class="text-sm text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">Ningún elemento agregado todavía.</div>`;
+        return;
+      }
+      listEl.innerHTML = inspection.elements
+        .map((el) => {
+          const daeInfo = el.result
+            ? `<span class="ml-2 text-xs text-slate-500">D.A.E. = ${fmtPct(el.result.dae)} (ΣWAP=${el.result.sum_wap.toFixed(1)} / Σ(D.C.·I.C.)=${el.result.sum_dc_ic.toFixed(1)})</span>`
+            : "";
+          return `
+          <div class="bg-white rounded-xl border border-slate-200 p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <span class="font-medium text-slate-800">${escapeHtml(el.elementDef.name)}</span>
+                ${el.label ? `<span class="text-slate-400 text-sm"> — ${escapeHtml(el.label)}</span>` : ""}
+                <span class="ml-2 text-xs text-slate-400">E.C.=${el.elementDef.ec}</span>
+                ${daeInfo}
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button class="add-subelement-btn text-xs text-indigo-600 hover:underline" data-element-id="${el.id}" data-element-code="${el.element_code}">+ sub-elemento</button>
+                ${photoUploadControl({ "element-id": el.id })}
+                <button class="delete-element-btn text-xs text-red-500 hover:underline" data-id="${el.id}">eliminar</button>
+              </div>
+            </div>
+            ${photoGallery(el.photos)}
+            <div class="space-y-3 pl-4 border-l-2 border-slate-100 mt-3">
+              ${el.subElements.map((se) => renderSubElement(se, el.id)).join("") || '<div class="text-xs text-slate-400">Sin sub-elementos.</div>'}
+            </div>
+          </div>
+        `;
+        })
+        .join("");
+
+      document.querySelectorAll(".add-subelement-btn").forEach((btn) =>
+        btn.addEventListener("click", () => openAddSubElementModal(btn.dataset.elementId, btn.dataset.elementCode)),
+      );
+      document.querySelectorAll(".delete-element-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm("¿Eliminar este elemento y todos sus datos?")) return;
+          await api(`/inspection-elements/${btn.dataset.id}`, { method: "DELETE" });
+          await loadAll();
+        }),
+      );
+      document.querySelectorAll(".add-pathology-btn").forEach((btn) =>
+        btn.addEventListener("click", () => openAddPathologyModal(btn.dataset.subElementId, btn.dataset.subElementCode)),
+      );
+      document.querySelectorAll(".delete-subelement-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm("¿Eliminar este sub-elemento y sus patologías?")) return;
+          await api(`/inspection-subelements/${btn.dataset.id}`, { method: "DELETE" });
+          await loadAll();
+        }),
+      );
+      document.querySelectorAll(".delete-pathology-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          await api(`/pathology-records/${btn.dataset.id}`, { method: "DELETE" });
+          await loadAll();
+        }),
+      );
+      document.querySelectorAll(".add-photo-btn").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const selector = btn.dataset.pathologyId
+            ? `.photo-input[data-pathology-id="${btn.dataset.pathologyId}"]`
+            : `.photo-input[data-element-id="${btn.dataset.elementId}"]:not([data-pathology-id])`;
+          document.querySelector(selector).click();
+        }),
+      );
+      document.querySelectorAll(".photo-input").forEach((input) =>
+        input.addEventListener("change", async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          await uploadPhoto(input.dataset.elementId, file, { pathologyRecordId: input.dataset.pathologyId });
+          await loadAll();
+        }),
+      );
+      document.querySelectorAll(".delete-photo-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          await api(`/photos/${btn.dataset.id}`, { method: "DELETE" });
+          await loadAll();
+        }),
+      );
+    }
+
+    function renderSubElement(se, elementInstanceId) {
+      const rows = se.pathologies
+        .map((pa) => {
+          const calced = pa.density_pct != null;
+          const severityColor = pa.dc_used === 3 ? "text-red-600" : pa.dc_used === 2 ? "text-orange-500" : "text-green-600";
+          const galleryRow = pa.photos.length
+            ? `<tr><td colspan="7" class="pb-1.5">${photoGallery(pa.photos)}</td></tr>`
+            : "";
+          return `
+          <tr class="border-t border-slate-100">
+            <td class="py-1.5 pr-2 whitespace-nowrap">${escapeHtml(pa.pathologyDef.name)} <span class="text-slate-400">(${pa.pathology_code})</span></td>
+            <td class="py-1.5 pr-2 whitespace-nowrap">${pa.measured_value} ${pa.pathologyDef.unit}</td>
+            <td class="py-1.5 pr-2 whitespace-nowrap">${pa.total_measure} ${pa.pathologyDef.unit}</td>
+            <td class="py-1.5 pr-2 whitespace-nowrap">${calced ? fmtPct(pa.density_pct) : "—"}</td>
+            <td class="py-1.5 pr-2 whitespace-nowrap ${calced ? severityColor : ""} font-medium">${calced ? (pa.dc_used === 3 ? "Alto" : pa.dc_used === 2 ? "Medio" : "Bajo") : "—"}</td>
+            <td class="py-1.5 pr-2 whitespace-nowrap">${calced ? pa.wap.toFixed(2) : "—"}</td>
+            <td class="py-1.5 text-right whitespace-nowrap">
+              ${photoUploadControl({ "element-id": elementInstanceId, "pathology-id": pa.id })}
+              <button class="delete-pathology-btn text-xs text-red-500 hover:underline ml-2" data-id="${pa.id}">eliminar</button>
+            </td>
+          </tr>
+          ${galleryRow}
+        `;
+        })
+        .join("");
+      return `
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-sm text-slate-700">
+              <span class="font-medium">${escapeHtml(se.subElementDef.name)}</span>
+              ${se.label ? `<span class="text-slate-400"> — ${escapeHtml(se.label)}</span>` : ""}
+              <span class="text-xs text-slate-400 ml-1">I.C.=${se.ic_used}</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button class="add-pathology-btn text-xs text-indigo-600 hover:underline" data-sub-element-id="${se.id}" data-sub-element-code="${se.subelement_code}">+ patología</button>
+              <button class="delete-subelement-btn text-xs text-red-500 hover:underline" data-id="${se.id}">eliminar</button>
+            </div>
+          </div>
+          ${
+            se.pathologies.length
+              ? `<div class="overflow-x-auto mt-1">
+                  <table class="w-full min-w-[600px] text-xs">
+                    <thead><tr class="text-slate-400 text-left"><th class="font-normal pb-1">Patología</th><th class="font-normal pb-1 whitespace-nowrap">Medida</th><th class="font-normal pb-1 whitespace-nowrap">Total</th><th class="font-normal pb-1 whitespace-nowrap">Densidad</th><th class="font-normal pb-1">D.C.</th><th class="font-normal pb-1 whitespace-nowrap">W.A.P.</th><th></th></tr></thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>`
+              : '<div class="text-xs text-slate-400 mt-1">Sin patologías registradas.</div>'
+          }
+        </div>
+      `;
+    }
+
+    // --- Modales: agregar elemento ---
+    document.getElementById("addElementBtn").addEventListener("click", () => {
+      openModal(document.getElementById("addElementModal"));
+    });
+    document.getElementById("cancelAddElement").addEventListener("click", () => {
+      closeModal(document.getElementById("addElementModal"));
+    });
+    document.getElementById("addElementForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      await api(`/inspections/${inspectionId}/elements`, { method: "POST", body: JSON.stringify(Object.fromEntries(fd.entries())) });
+      closeModal(document.getElementById("addElementModal"));
+      e.target.reset();
+      await loadAll();
+    });
+
+    // --- Modales: agregar sub-elemento ---
+    function openAddSubElementModal(inspectionElementId, elementCode) {
+      const form = document.getElementById("addSubElementForm");
+      form.inspectionElementId.value = inspectionElementId;
+      const select = form.querySelector("select[name=subElementCode]");
+      select.innerHTML = subElementsFor(elementCode)
+        .map((se) => `<option value="${se.code}">${escapeHtml(se.name)} (I.C.=${se.ic}${se.source !== "WABIM" ? ", " + se.source : ""})</option>`)
+        .join("");
+      openModal(document.getElementById("addSubElementModal"));
+    }
+    document.getElementById("addSubElementForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      const subDef = catalog.subElements.find((se) => se.code === payload.subElementCode);
+      payload.ic = subDef.ic;
+      const inspectionElementId = payload.inspectionElementId;
+      delete payload.inspectionElementId;
+      await api(`/inspection-elements/${inspectionElementId}/subelements`, { method: "POST", body: JSON.stringify(payload) });
+      closeModal(document.getElementById("addSubElementModal"));
+      e.target.reset();
+      await loadAll();
+    });
+
+    // --- Modales: agregar patología ---
+    // Cada patología tiene su propia unidad (Anexo C INVIAS) aunque comparta
+    // sub-elemento con otras de unidad distinta (p.ej. "Diseño" mezcla daños
+    // en "unidad" y en "ml"); por eso la unidad se muestra dinámicamente según
+    // la patología seleccionada, en vez de fijarse una sola vez por sub-elemento.
+    function updatePathologyUnitHints(select) {
+      const unit = select.selectedOptions[0]?.dataset.unit || "—";
+      document.getElementById("measuredValueUnit").textContent = unit;
+      document.getElementById("totalMeasureUnit").textContent = unit;
+    }
+    document.getElementById("pathologyCodeSelect").addEventListener("change", (e) => updatePathologyUnitHints(e.target));
+
+    // Ubicación: si el elemento tiene una convención cerrada del manual (Celda 1),
+    // se muestra un <select> con esas opciones + "Otro"; si no, queda como texto
+    // libre (p.ej. elementos de concreto/metálicos, que se identifican por esquema).
+    function renderLocationField(elementCode) {
+      const options = LOCATION_OPTIONS_BY_ELEMENT[elementCode];
+      const container = document.getElementById("locationFieldContainer");
+      if (options?.length) {
+        container.innerHTML = selectWithOther("location", options, { placeholder: "Describe la ubicación..." });
+        bindSelectsWithOther(container);
+      } else {
+        container.innerHTML = `<input type="text" name="location" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Ubicación / identificación del elemento" />`;
+      }
+    }
+
+    function openAddPathologyModal(inspectionSubElementId, subElementCode) {
+      const form = document.getElementById("addPathologyForm");
+      form.inspectionSubElementId.value = inspectionSubElementId;
+      const select = form.querySelector("select[name=pathologyCode]");
+      select.innerHTML = pathologiesFor(subElementCode)
+        .map(
+          (p) =>
+            `<option value="${p.code}" data-unit="${p.unit}">${escapeHtml(p.name)} (${p.code}) — umbral Bajo≤${p.thresholds.lowMax}% / Alto≥${p.thresholds.highMin}%${p.source !== "WABIM" ? ", " + p.source : ""}</option>`,
+        )
+        .join("");
+      updatePathologyUnitHints(select);
+      const elementCode = catalog.subElements.find((se) => se.code === subElementCode)?.elementCode;
+      renderLocationField(elementCode);
+      openModal(document.getElementById("addPathologyModal"));
+    }
+    document.getElementById("addPathologyForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      resolveSelectsWithOther(payload, [{ select: "location", other: "locationOther" }]);
+      const inspectionSubElementId = payload.inspectionSubElementId;
+      delete payload.inspectionSubElementId;
+      await api(`/inspection-subelements/${inspectionSubElementId}/pathologies`, { method: "POST", body: JSON.stringify(payload) });
+      closeModal(document.getElementById("addPathologyModal"));
+      e.target.reset();
+      await loadAll();
+    });
+
+    document.querySelectorAll(".cancel-modal").forEach((btn) =>
+      btn.addEventListener("click", (e) => {
+        closeModal(e.target.closest(".fixed"));
+      }),
+    );
+
+    // --- Calcular WABIM ---
+    document.getElementById("calculateBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("calculateBtn");
+      btn.disabled = true;
+      btn.textContent = "Calculando…";
+      try {
+        const { result } = await api(`/inspections/${inspectionId}/calculate`, { method: "POST" });
+        await loadAll();
+        renderGradoAfectacion(result);
+        renderTrace(result);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Calcular WABIM";
+      }
+    });
+
+    function renderTrace(result) {
+      document.getElementById("traceSection").classList.remove("hidden");
+      document.getElementById("stepsList").innerHTML = result.steps.map((s) => `<li>${s.replace(/^\d+\.\s*/, "")}</li>`).join("");
+
+      // El detalle numérico por elemento/subcategoría (ΣWAP, Σ(D.C.·I.C.), etc.)
+      // ya se ve como % y gráfica en renderGradoAfectacion(); aquí solo se deja
+      // la trazabilidad de las sumatorias para quien quiera auditar la Ecuación 5.
+      document.getElementById("traceDetail").innerHTML = `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm">
+          <strong>Ecuación 5 — D.T.A.</strong> = Σ(D.A.S.C.·C.E.C.) / ΣC.E.C. = ${result.sumDascCec.toFixed(2)} / ${result.sumCec.toFixed(2)} = <strong>${fmtPct(result.dta)}</strong>
+        </div>
+      `;
+    }
+
+    loadAll().then(() => {
+      if (inspection?.result) {
+        // reconstruir un objeto de "result" ligero a partir de lo persistido para mostrar el detalle sin recalcular
+        api(`/inspections/${inspectionId}/calculate`, { method: "POST" })
+          .then(({ result }) => {
+            renderGradoAfectacion(result);
+            renderTrace(result);
+          })
+          .catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>

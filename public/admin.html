@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Coeficientes WABIM — Administración</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/critical.css" />
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <nav id="nav" class="bg-white border-b border-slate-200 sticky top-0 z-10"></nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-semibold text-slate-800">Coeficientes de la metodología WABIM</h1>
+    <p class="text-sm text-slate-500 mt-1 mb-6 max-w-3xl">
+      Todos los pesos usados por el motor de cálculo son editables. Los valores marcados <span class="font-medium">WABIM</span> provienen literalmente
+      del artículo científico; los marcados <span class="font-medium">INVIAS</span> o <span class="font-medium">EXTENSION</span> son interpretaciones o
+      adiciones documentadas para cubrir el Manual INVÍAS por completo (ver tooltip / columna "origen"). Los cambios aplican a los
+      <strong>próximos</strong> cálculos; las inspecciones ya calculadas conservan los coeficientes usados en su momento (trazabilidad).
+    </p>
+
+    <div id="loginWarning" class="hidden bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4 mb-6">
+      Debes <a href="/login.html" class="underline">iniciar sesión como Administrador</a> para editar los coeficientes. Puedes verlos sin iniciar sesión.
+    </div>
+
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-slate-800 mb-3">Subcategorías — Coeficiente de Elemento Categórico (C.E.C.), Ecuación 5</h2>
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
+          <th class="text-left px-4 py-2">Subcategoría</th><th class="text-left px-4 py-2">C.E.C.</th><th class="text-left px-4 py-2">Origen</th><th></th>
+        </tr></thead><tbody id="subCategoriesTable"></tbody></table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-slate-800 mb-3">Elementos — Coeficiente de Elemento (E.C.), Ecuación 4</h2>
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
+          <th class="text-left px-4 py-2">Elemento</th><th class="text-left px-4 py-2">Subcategoría</th><th class="text-left px-4 py-2">E.C.</th><th class="text-left px-4 py-2">Origen</th><th></th>
+        </tr></thead><tbody id="elementsTable"></tbody></table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-slate-800 mb-3">Sub-elementos — Coeficiente de Importancia (I.C.), Ecuación 2</h2>
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
+          <th class="text-left px-4 py-2">Sub-elemento</th><th class="text-left px-4 py-2">Elemento</th><th class="text-left px-4 py-2">I.C.</th><th class="text-left px-4 py-2">Unidad</th><th class="text-left px-4 py-2">Origen</th><th></th>
+        </tr></thead><tbody id="subElementsTable"></tbody></table>
+      </div>
+    </section>
+
+    <section class="mb-10">
+      <h2 class="text-lg font-semibold text-slate-800 mb-3">Patologías — Umbrales del Coeficiente de Densidad (D.C.), Tabla 6</h2>
+      <p class="text-xs text-slate-500 mb-2">Bajo si densidad ≤ "límite Bajo"; Alto si densidad ≥ "límite Alto"; Medio en el rango intermedio.</p>
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500 text-xs uppercase"><tr>
+          <th class="text-left px-4 py-2">Patología</th><th class="text-left px-4 py-2">Sub-elemento</th><th class="text-left px-4 py-2">Límite Bajo (%)</th><th class="text-left px-4 py-2">Límite Alto (%)</th><th class="text-left px-4 py-2">Origen</th><th></th>
+        </tr></thead><tbody id="pathologiesTable"></tbody></table>
+      </div>
+    </section>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <script src="/app.js"></script>
+  <script>
+    renderNav("admin");
+    renderFooter();
+    const auth = getAuth();
+    const isAdmin = auth && auth.user.role === "ADMIN";
+    if (!isAdmin) document.getElementById("loginWarning").classList.remove("hidden");
+
+    function sourceBadge(source) {
+      const colors = { WABIM: "bg-indigo-100 text-indigo-700", INVIAS: "bg-sky-100 text-sky-700", EXTENSION: "bg-amber-100 text-amber-700" };
+      return `<span class="text-xs px-2 py-0.5 rounded-full ${colors[source] || "bg-slate-100 text-slate-600"}">${source}</span>`;
+    }
+
+    function editableCell(value, onSave) {
+      if (!isAdmin) return `<span>${value}</span>`;
+      const inputId = "inp-" + Math.random().toString(36).slice(2);
+      setTimeout(() => {
+        document.getElementById(inputId).addEventListener("change", async (e) => {
+          await onSave(Number(e.target.value));
+        });
+      }, 0);
+      return `<input id="${inputId}" type="number" step="any" value="${value}" class="w-24 rounded border border-slate-300 px-2 py-1" />`;
+    }
+
+    async function load() {
+      const catalog = await api("/catalog");
+
+      document.getElementById("subCategoriesTable").innerHTML = catalog.subCategories
+        .map(
+          (s) => `<tr class="border-t border-slate-100">
+          <td class="px-4 py-2">${escapeHtml(s.name)} <span class="text-slate-400 text-xs">(${s.code})</span></td>
+          <td class="px-4 py-2">${editableCell(s.cec, (v) => api(`/catalog/subcategories/${s.code}`, { method: "PUT", body: JSON.stringify({ cec: v }) }))}</td>
+          <td class="px-4 py-2">${sourceBadge(s.source)}</td><td></td>
+        </tr>`,
+        )
+        .join("");
+
+      document.getElementById("elementsTable").innerHTML = catalog.elements
+        .map(
+          (e) => `<tr class="border-t border-slate-100">
+          <td class="px-4 py-2">${escapeHtml(e.name)}</td>
+          <td class="px-4 py-2 text-slate-500">${e.subCategory}</td>
+          <td class="px-4 py-2">${editableCell(e.ec, (v) => api(`/catalog/elements/${e.code}`, { method: "PUT", body: JSON.stringify({ ec: v }) }))}</td>
+          <td class="px-4 py-2">${sourceBadge(e.source)}</td><td></td>
+        </tr>`,
+        )
+        .join("");
+
+      document.getElementById("subElementsTable").innerHTML = catalog.subElements
+        .map(
+          (se) => `<tr class="border-t border-slate-100">
+          <td class="px-4 py-2">${escapeHtml(se.name)}</td>
+          <td class="px-4 py-2 text-slate-500">${se.elementCode}</td>
+          <td class="px-4 py-2">${editableCell(se.ic, (v) => api(`/catalog/subelements/${se.code}`, { method: "PUT", body: JSON.stringify({ ic: v }) }))}</td>
+          <td class="px-4 py-2 text-slate-500">${se.unit}</td>
+          <td class="px-4 py-2">${sourceBadge(se.source)}</td><td></td>
+        </tr>`,
+        )
+        .join("");
+
+      document.getElementById("pathologiesTable").innerHTML = catalog.pathologyTypes
+        .map((p) => {
+          const lowId = "low-" + p.code;
+          const highId = "high-" + p.code;
+          const save = async () => {
+            const lowMax = Number(document.getElementById(lowId).value);
+            const highMin = Number(document.getElementById(highId).value);
+            await api(`/catalog/pathologies/${p.code}`, { method: "PUT", body: JSON.stringify({ lowMax, highMin }) });
+          };
+          return `<tr class="border-t border-slate-100">
+            <td class="px-4 py-2">${escapeHtml(p.name)} <span class="text-slate-400 text-xs">(${p.code})</span></td>
+            <td class="px-4 py-2 text-slate-500">${p.subElementCode}</td>
+            <td class="px-4 py-2">${isAdmin ? `<input id="${lowId}" type="number" step="any" value="${p.thresholds.lowMax}" class="w-20 rounded border border-slate-300 px-2 py-1" />` : p.thresholds.lowMax}</td>
+            <td class="px-4 py-2">${isAdmin ? `<input id="${highId}" type="number" step="any" value="${p.thresholds.highMin}" class="w-20 rounded border border-slate-300 px-2 py-1" />` : p.thresholds.highMin}</td>
+            <td class="px-4 py-2">${sourceBadge(p.source)}</td>
+            <td class="px-4 py-2">${isAdmin ? `<button class="text-xs text-indigo-600 hover:underline save-threshold-btn" data-code="${p.code}">Guardar</button>` : ""}</td>
+          </tr>`;
+        })
+        .join("");
+
+      if (isAdmin) {
+        document.querySelectorAll(".save-threshold-btn").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const code = btn.dataset.code;
+            const lowMax = Number(document.getElementById("low-" + code).value);
+            const highMin = Number(document.getElementById("high-" + code).value);
+            await api(`/catalog/pathologies/${code}`, { method: "PUT", body: JSON.stringify({ lowMax, highMin }) });
+            btn.textContent = "✓ Guardado";
+            setTimeout(() => (btn.textContent = "Guardar"), 1500);
+          });
+        });
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

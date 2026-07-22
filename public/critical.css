@@ -1,0 +1,43 @@
+/* Reglas críticas de respaldo (no cosméticas): garantizan que el
+   comportamiento de mostrar/ocultar modales funcione incluso si, por
+   cualquier razón (sin conexión a internet, CDN bloqueado, etc.), el CDN
+   de Tailwind (https://cdn.tailwindcss.com) no llega a cargar. Tailwind
+   sigue siendo la fuente de todo el resto del estilo visual. */
+.hidden {
+  display: none !important;
+}
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Respaldo de posicionamiento para los modales (index/bridge/inspection.html):
+   todos usan la misma combinación de clases "fixed inset-0 ... flex".
+   Sin esto, si el CDN no carga, el modal deja de estar "hidden" pero
+   nunca se muestra como overlay centrado — queda como un bloque normal
+   al final de la página, invisible sin hacer scroll, y el botón que lo
+   abre parece no hacer nada. */
+.fixed.inset-0 {
+  position: fixed !important;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+.fixed.inset-0.flex {
+  display: flex !important;
+}
+.items-center {
+  align-items: center !important;
+}
+.justify-center {
+  justify-content: center !important;
+}
+.p-4 {
+  padding: 1rem !important;
+}
+.z-20 {
+  z-index: 20 !important;
+}
+.bg-black\/30 {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}

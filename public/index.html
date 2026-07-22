@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Inventario de Puentes — Inspección Visual de Puentes y Pontones WABIM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/critical.css" />
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <nav id="nav" class="bg-white border-b border-slate-200 sticky top-0 z-10"></nav>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold text-slate-800">Inventario de Puentes</h1>
+        <p class="text-sm text-slate-500 mt-1">Motor de cálculo WABIM (metodología de promedios ponderados) + Manual de Inspección Visual INVÍAS.</p>
+      </div>
+      <button id="newBridgeBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg px-4 py-2.5">+ Registrar puente</button>
+    </div>
+
+    <div id="stats" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+
+    <div id="bridgeList" class="grid gap-4"></div>
+  </main>
+
+  <footer id="footer"></footer>
+
+  <!-- Modal: nuevo puente -->
+  <div id="newBridgeModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+      <h2 class="text-lg font-semibold text-slate-800 mb-4">Registrar nuevo puente</h2>
+      <form id="newBridgeForm" class="grid grid-cols-2 gap-3 text-sm">
+        <label class="col-span-1">Código*<input required name="code" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="PTE-003" /></label>
+        <label class="col-span-1">Nombre*<input required name="name" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Puente sobre..." /></label>
+        <label class="col-span-1">Municipio<input name="municipality" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Departamento<input name="department" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Latitud<input name="latitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Longitud<input name="longitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Ruta<input name="route" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Kilómetro (PR)<input name="km" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Tipo estructural (transversal) <span class="text-slate-400 text-xs">Tabla 2 INVÍAS</span>
+          <div id="structuralTypeTransverseField"></div>
+        </label>
+        <label class="col-span-1">Tipo estructural (longitudinal) <span class="text-slate-400 text-xs">Tabla 3 INVÍAS</span>
+          <div id="structuralTypeLongitudinalField"></div>
+        </label>
+        <label class="col-span-1"># de luces<input name="numberOfSpans" type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Longitud (m)<input name="length" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Ancho (m)<input name="width" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Material <span class="text-slate-400 text-xs">Tabla 8 INVÍAS</span>
+          <div id="materialField"></div>
+        </label>
+        <label class="col-span-1">Año construcción<input name="constructionYear" type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Propietario<input name="owner" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-2">Observaciones<textarea name="notes" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" rows="2"></textarea></label>
+        <div class="col-span-2 flex justify-end gap-2 mt-2">
+          <button type="button" id="cancelNewBridge" class="px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
+          <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    renderNav("home");
+    renderFooter();
+
+    async function load() {
+      const { bridges } = await api("/bridges");
+      const listEl = document.getElementById("bridgeList");
+      const statsEl = document.getElementById("stats");
+
+      const totalBridges = bridges.length;
+      // Nota: el listado no trae el DTA más reciente por puente en esta vista ligera;
+      // se calcula al entrar al detalle de cada puente.
+      statsEl.innerHTML = `
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-2xl font-semibold text-slate-800">${totalBridges}</div>
+          <div class="text-xs text-slate-500 mt-1">Puentes registrados</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-2xl font-semibold text-slate-800">WABIM</div>
+          <div class="text-xs text-slate-500 mt-1">Metodología de cálculo</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-2xl font-semibold text-slate-800">INVÍAS</div>
+          <div class="text-xs text-slate-500 mt-1">Manual de referencia</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <a href="/admin.html" class="text-sm text-indigo-600 hover:underline">Editar coeficientes →</a>
+          <div class="text-xs text-slate-500 mt-1">I.C. / E.C. / C.E.C. / D.C.</div>
+        </div>
+      `;
+
+      if (bridges.length === 0) {
+        listEl.innerHTML = `<div class="text-sm text-slate-500 bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">Aún no hay puentes registrados. Ejecuta <code class="bg-slate-100 px-1 rounded">npm run seed</code> para cargar datos de ejemplo, o usa "Registrar puente".</div>`;
+        return;
+      }
+
+      listEl.innerHTML = bridges
+        .map(
+          (b) => `
+        <a href="/bridge.html?id=${b.id}" class="block bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="font-semibold text-slate-800">${escapeHtml(b.name)}</div>
+              <div class="text-xs text-slate-500 mt-1">${escapeHtml(b.code)} · ${escapeHtml(b.municipality || "")}, ${escapeHtml(b.department || "")}</div>
+            </div>
+            <div class="text-slate-400">→</div>
+          </div>
+        </a>
+      `,
+        )
+        .join("");
+    }
+
+    document.getElementById("structuralTypeTransverseField").innerHTML = selectWithOther("structuralTypeTransverse", BRIDGE_TYPE_TRANSVERSE);
+    document.getElementById("structuralTypeLongitudinalField").innerHTML = selectWithOther("structuralTypeLongitudinal", BRIDGE_TYPE_LONGITUDINAL);
+    document.getElementById("materialField").innerHTML = selectWithOther("material", BRIDGE_MATERIALS);
+    bindSelectsWithOther(document.getElementById("newBridgeForm"));
+
+    document.getElementById("newBridgeBtn").addEventListener("click", () => {
+      openModal(document.getElementById("newBridgeModal"));
+    });
+    document.getElementById("cancelNewBridge").addEventListener("click", () => {
+      closeModal(document.getElementById("newBridgeModal"));
+    });
+    document.getElementById("newBridgeForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      resolveSelectsWithOther(payload, [
+        { select: "structuralTypeTransverse", other: "structuralTypeTransverseOther" },
+        { select: "structuralTypeLongitudinal", other: "structuralTypeLongitudinalOther" },
+        { select: "material", other: "materialOther" },
+      ]);
+      await api("/bridges", { method: "POST", body: JSON.stringify(payload) });
+      closeModal(document.getElementById("newBridgeModal"));
+      e.target.reset();
+      load();
+    });
+
+    load();
+  </script>
+</body>
+</html>
