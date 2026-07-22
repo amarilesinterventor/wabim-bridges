@@ -61,6 +61,7 @@
               <h1 class="text-2xl font-semibold text-slate-800">${escapeHtml(bridge.name)}</h1>
               <div class="text-sm text-slate-500 mt-1">${escapeHtml(bridge.code)} · ${escapeHtml(bridge.municipality || "")}, ${escapeHtml(bridge.department || "")}</div>
             </div>
+            <button id="deleteBridgeBtn" class="shrink-0 text-sm text-red-500 hover:underline">Eliminar puente</button>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 text-sm">
             <div><div class="text-slate-400 text-xs">Tipo transversal</div><div>${escapeHtml(bridge.structural_type_transverse || "—")}</div></div>
@@ -77,6 +78,12 @@
           ${bridge.notes ? `<div class="mt-4 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">${escapeHtml(bridge.notes)}</div>` : ""}
         </div>
       `;
+
+      document.getElementById("deleteBridgeBtn").addEventListener("click", async () => {
+        if (!confirm(`¿Eliminar el puente "${bridge.name}"? Esto borra también todas sus inspecciones, patologías y fotos. Esta acción no se puede deshacer.`)) return;
+        await api(`/bridges/${bridgeId}`, { method: "DELETE" });
+        window.location.href = "/index.html";
+      });
 
       const listEl = document.getElementById("inspectionList");
       if (bridge.inspections.length === 0) {

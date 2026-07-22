@@ -75,6 +75,32 @@ export function getBridge(id: string) {
   return { ...(bridge as any), documents, inspections };
 }
 
+/** URLs de todas las fotos (panorámicas + de daño) de las inspecciones de un puente, para borrar los archivos del disco antes de eliminar el registro. */
+export function getBridgePhotoUrls(bridgeId: string): string[] {
+  const rows = db
+    .prepare(
+      `SELECT p.url FROM photos p
+       WHERE p.inspection_id IN (SELECT id FROM inspections WHERE bridge_id = ?)
+          OR p.inspection_element_id IN (
+               SELECT ie.id FROM inspection_elements ie
+               WHERE ie.inspection_id IN (SELECT id FROM inspections WHERE bridge_id = ?)
+             )
+          OR p.pathology_record_id IN (
+               SELECT pr.id FROM pathology_records pr
+               JOIN inspection_subelements ise ON ise.id = pr.inspection_subelement_id
+               JOIN inspection_elements ie ON ie.id = ise.inspection_element_id
+               WHERE ie.inspection_id IN (SELECT id FROM inspections WHERE bridge_id = ?)
+             )`,
+    )
+    .all(bridgeId, bridgeId, bridgeId) as any[];
+  return rows.map((r) => r.url);
+}
+
+/** Elimina el puente y, por cascada (ON DELETE CASCADE), sus inspecciones, elementos, patologías y fotos en base de datos. Los archivos de foto en disco deben borrarse aparte (ver getBridgePhotoUrls). */
+export function deleteBridge(id: string) {
+  db.prepare(`DELETE FROM bridges WHERE id = ?`).run(id);
+}
+
 export function createBridge(payload: Record<string, any>) {
   const id = newId();
   db.prepare(`

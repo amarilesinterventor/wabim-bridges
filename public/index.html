@@ -121,18 +121,29 @@
       listEl.innerHTML = bridges
         .map(
           (b) => `
-        <a href="/bridge.html?id=${b.id}" class="block bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition">
-          <div class="flex items-center justify-between">
-            <div>
-              <div class="font-semibold text-slate-800">${escapeHtml(b.name)}</div>
+        <div class="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition">
+          <a href="/bridge.html?id=${b.id}" class="flex-1 flex items-center justify-between min-w-0">
+            <div class="min-w-0">
+              <div class="font-semibold text-slate-800 truncate">${escapeHtml(b.name)}</div>
               <div class="text-xs text-slate-500 mt-1">${escapeHtml(b.code)} · ${escapeHtml(b.municipality || "")}, ${escapeHtml(b.department || "")}</div>
             </div>
-            <div class="text-slate-400">→</div>
-          </div>
-        </a>
+            <div class="text-slate-400 shrink-0 ml-2">→</div>
+          </a>
+          <button class="delete-bridge-btn shrink-0 text-xs text-red-500 hover:underline px-2" data-id="${b.id}" data-name="${escapeHtml(b.name)}" title="Eliminar puente">eliminar</button>
+        </div>
       `,
         )
         .join("");
+
+      listEl.querySelectorAll(".delete-bridge-btn").forEach((btn) =>
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!confirm(`¿Eliminar el puente "${btn.dataset.name}"? Esto borra también todas sus inspecciones, patologías y fotos. Esta acción no se puede deshacer.`)) return;
+          await api(`/bridges/${btn.dataset.id}`, { method: "DELETE" });
+          load();
+        }),
+      );
     }
 
     document.getElementById("structuralTypeTransverseField").innerHTML = selectWithOther("structuralTypeTransverse", BRIDGE_TYPE_TRANSVERSE);

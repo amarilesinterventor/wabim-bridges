@@ -28,6 +28,8 @@ import {
   listBridges,
   getBridge,
   createBridge,
+  deleteBridge,
+  getBridgePhotoUrls,
   createInspection,
   updateInspectionResponsible,
   getInspection,
@@ -253,6 +255,24 @@ addRoute("GET", "/api/bridges/:id", (req, res, params) => {
   const bridge = getBridge(params.id);
   if (!bridge) return sendJson(res, 404, { error: "Puente no encontrado." });
   sendJson(res, 200, { bridge });
+});
+
+// Elimina el puente y, por cascada en BD, todas sus inspecciones/elementos/
+// patologías/fotos; los archivos de foto en disco se borran aparte porque el
+// cascade de SQLite solo alcanza a las filas, no al sistema de archivos.
+addRoute("DELETE", "/api/bridges/:id", async (req, res, params) => {
+  const bridge = getBridge(params.id);
+  if (!bridge) return sendJson(res, 404, { error: "Puente no encontrado." });
+  const photoUrls = getBridgePhotoUrls(params.id);
+  deleteBridge(params.id);
+  for (const url of photoUrls) {
+    try {
+      await unlink(join(PUBLIC_DIR, url));
+    } catch {
+      // El archivo ya no existe en disco; el registro en BD ya se borró, no es un error fatal.
+    }
+  }
+  sendJson(res, 200, { ok: true });
 });
 
 addRoute("POST", "/api/bridges/:id/inspections", (req, res, params, body) => {
