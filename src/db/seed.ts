@@ -69,10 +69,10 @@ function seedUsers() {
 function seedBridges() {
   const insertBridge = db.prepare(`
     INSERT OR REPLACE INTO bridges (
-      id, code, name, municipality, department, latitude, longitude, route, km,
+      id, code, name, municipality, department, latitude, longitude, route, route_code, concession, km, skew,
       structural_type_transverse, structural_type_longitudinal, number_of_spans,
       length, width, gauge, material, construction_year, owner, entity, notes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const bridge1Id = newId();
@@ -85,7 +85,10 @@ function seedBridges() {
     4.491659,
     -75.41528,
     "Calle 24",
+    "01RIS02",
     0,
+    0,
+    5,
     "Armadura de paso inferior",
     "Vigas simplemente apoyadas",
     1,
@@ -109,7 +112,10 @@ function seedBridges() {
     4.8339,
     -75.6689,
     "Vía Cauca",
+    "66RIS01",
+    1,
     12.4,
+    0,
     "Losa sobre vigas",
     "Vigas continuas",
     3,
@@ -130,8 +136,8 @@ function seedBridges() {
 function seedInspection(bridgeId: string, inspectorId: string) {
   const inspectionId = newId();
   db.prepare(
-    `INSERT INTO inspections (id, bridge_id, scheduled_date, executed_date, time, weather, equipment, status, priority, notes, inspector_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'COMPLETED', 'MEDIUM', ?, ?)`,
+    `INSERT INTO inspections (id, bridge_id, scheduled_date, executed_date, time, weather, equipment, status, priority, notes, inspector_id, responsible_name, responsible_id_number)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'COMPLETED', 'MEDIUM', ?, ?, ?, ?)`,
   ).run(
     inspectionId,
     bridgeId,
@@ -142,6 +148,8 @@ function seedInspection(bridgeId: string, inspectorId: string) {
     "Cámara digital, fisurómetro de bolsillo, flexómetro, binóculos",
     "Inspección visual general de rutina. Datos ilustrativos con fines de demostración del sistema.",
     inspectorId,
+    "Inspector Demo",
+    "1088300160",
   );
 
   // Estructura de entrada para el motor WABIM (ver src/wabim/types.ts)

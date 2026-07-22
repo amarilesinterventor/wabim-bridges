@@ -15,6 +15,10 @@
 
     <div id="header" class="bg-white rounded-xl border border-slate-200 p-6 mb-6"></div>
 
+    <div id="responsibleSection" class="bg-white rounded-xl border border-slate-200 p-6 mb-6"></div>
+
+    <div id="panoramicSection" class="bg-white rounded-xl border border-slate-200 p-6 mb-6"></div>
+
     <div id="resultSummary" class="mb-6"></div>
 
     <div id="afectacionSection" class="mb-10 hidden">
@@ -200,9 +204,65 @@
         </div>
       `;
 
+      renderResponsible();
+      renderPanoramic();
       renderResultSummary();
       renderElements();
       populateElementSelect();
+    }
+
+    // Persona que levantó/firmó el informe en campo (Anexo A INVÍAS, campo
+    // "LEVANTÓ"): nombre + cédula, editable en línea y guardado vía PATCH.
+    function renderResponsible() {
+      const el = document.getElementById("responsibleSection");
+      el.innerHTML = `
+        <h3 class="text-sm font-semibold text-slate-700 mb-3">Responsable del informe</h3>
+        <form id="responsibleForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm items-end">
+          <label class="block">Nombre completo
+            <input name="responsibleName" value="${escapeHtml(inspection.responsible_name || "")}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+          </label>
+          <label class="block">Cédula
+            <input name="responsibleIdNumber" value="${escapeHtml(inspection.responsible_id_number || "")}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
+          </label>
+          <button type="submit" class="bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5 h-fit">Guardar</button>
+        </form>
+      `;
+      document.getElementById("responsibleForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        await api(`/inspections/${inspectionId}`, { method: "PATCH", body: JSON.stringify(Object.fromEntries(fd.entries())) });
+        await loadAll();
+      });
+    }
+
+    // Fotografías panorámicas: vista general de la estructura (no ligadas a un
+    // elemento/patología puntual) — se usan en el registro documental y como
+    // portada del informe PDF.
+    function renderPanoramic() {
+      const el = document.getElementById("panoramicSection");
+      el.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold text-slate-700">Fotografías panorámicas de la estructura</h3>
+          ${panoramicPhotoUploadControl()}
+        </div>
+        ${photoGallery(inspection.panoramicPhotos)}
+        ${!inspection.panoramicPhotos?.length ? '<p class="text-xs text-slate-400">Sin fotos panorámicas todavía.</p>' : ""}
+      `;
+      document.getElementById("addPanoramicPhotoBtn").addEventListener("click", () => {
+        document.getElementById("panoramicPhotoInput").click();
+      });
+      document.getElementById("panoramicPhotoInput").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        await uploadPanoramicPhoto(inspectionId, file);
+        await loadAll();
+      });
+      el.querySelectorAll(".delete-photo-btn").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          await api(`/photos/${btn.dataset.id}`, { method: "DELETE" });
+          await loadAll();
+        }),
+      );
     }
 
     function renderResultSummary() {

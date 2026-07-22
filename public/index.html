@@ -29,16 +29,34 @@
   <!-- Modal: nuevo puente -->
   <div id="newBridgeModal" class="fixed inset-0 bg-black/30 hidden items-center justify-center p-4 z-20">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-      <h2 class="text-lg font-semibold text-slate-800 mb-4">Registrar nuevo puente</h2>
+      <h2 class="text-lg font-semibold text-slate-800 mb-1">Registrar nuevo puente</h2>
+
+      <div class="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3">
+        <label class="text-xs font-medium text-slate-600">Buscar en catálogo oficial INVÍAS (datos.gov.co)</label>
+        <div class="relative mt-1">
+          <input id="inviasSearchInput" type="text" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Nombre del puente o vía..." autocomplete="off" />
+          <div id="inviasSearchResults" class="hidden absolute z-30 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto text-sm"></div>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Selecciona un resultado para prellenar los campos; luego revisa y completa los que falten.</p>
+      </div>
+
       <form id="newBridgeForm" class="grid grid-cols-2 gap-3 text-sm">
         <label class="col-span-1">Código*<input required name="code" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="PTE-003" /></label>
         <label class="col-span-1">Nombre*<input required name="name" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Puente sobre..." /></label>
-        <label class="col-span-1">Municipio<input name="municipality" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
-        <label class="col-span-1">Departamento<input name="department" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <div id="departmentCityFields" class="contents"></div>
         <label class="col-span-1">Latitud<input name="latitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
         <label class="col-span-1">Longitud<input name="longitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
-        <label class="col-span-1">Ruta<input name="route" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Nombre de la vía <span class="text-slate-400 text-xs">Anexo A INVÍAS</span><input name="route" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Código de la vía <span class="text-slate-400 text-xs">Anexo A INVÍAS</span><input name="routeCode" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
         <label class="col-span-1">Kilómetro (PR)<input name="km" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Esviajamiento (°) <span class="text-slate-400 text-xs">Anexo A INVÍAS</span><input name="skew" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <label class="col-span-1">Vía en concesión <span class="text-slate-400 text-xs">Anexo A INVÍAS</span>
+          <select name="concession" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option value="">Sin definir</option>
+            <option value="true">Sí</option>
+            <option value="false">No</option>
+          </select>
+        </label>
         <label class="col-span-1">Tipo estructural (transversal) <span class="text-slate-400 text-xs">Tabla 2 INVÍAS</span>
           <div id="structuralTypeTransverseField"></div>
         </label>
@@ -62,6 +80,7 @@
     </div>
   </div>
 
+  <script src="/colombia.js"></script>
   <script src="/app.js"></script>
   <script>
     renderNav("home");
@@ -119,7 +138,9 @@
     document.getElementById("structuralTypeTransverseField").innerHTML = selectWithOther("structuralTypeTransverse", BRIDGE_TYPE_TRANSVERSE);
     document.getElementById("structuralTypeLongitudinalField").innerHTML = selectWithOther("structuralTypeLongitudinal", BRIDGE_TYPE_LONGITUDINAL);
     document.getElementById("materialField").innerHTML = selectWithOther("material", BRIDGE_MATERIALS);
+    document.getElementById("departmentCityFields").innerHTML = departmentCityFields();
     bindSelectsWithOther(document.getElementById("newBridgeForm"));
+    bindDepartmentCityFields(document.getElementById("newBridgeForm"));
 
     document.getElementById("newBridgeBtn").addEventListener("click", () => {
       openModal(document.getElementById("newBridgeModal"));
@@ -136,10 +157,65 @@
         { select: "structuralTypeLongitudinal", other: "structuralTypeLongitudinalOther" },
         { select: "material", other: "materialOther" },
       ]);
+      resolveDepartmentCityFields(payload);
       await api("/bridges", { method: "POST", body: JSON.stringify(payload) });
       closeModal(document.getElementById("newBridgeModal"));
       e.target.reset();
       load();
+    });
+
+    // --- Buscar en catálogo INVÍAS (datos.gov.co) y prellenar el formulario ---
+    let inviasSearchTimeout = null;
+    const inviasSearchInput = document.getElementById("inviasSearchInput");
+    const inviasSearchResults = document.getElementById("inviasSearchResults");
+    inviasSearchInput.addEventListener("input", () => {
+      clearTimeout(inviasSearchTimeout);
+      const query = inviasSearchInput.value;
+      inviasSearchTimeout = setTimeout(async () => {
+        const results = await searchInviasCatalog(query);
+        if (!results.length) {
+          inviasSearchResults.classList.add("hidden");
+          inviasSearchResults.innerHTML = "";
+          return;
+        }
+        inviasSearchResults.innerHTML = results
+          .map(
+            (r, i) => `
+          <button type="button" class="invias-result-item block w-full text-left px-3 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-b-0" data-index="${i}">
+            <div class="font-medium text-slate-800">${escapeHtml(r.nombre || "(sin nombre)")}</div>
+            <div class="text-xs text-slate-500">${escapeHtml(r.carretera || "")} ${r.via ? "· vía " + escapeHtml(r.via) : ""}</div>
+          </button>
+        `,
+          )
+          .join("");
+        inviasSearchResults.classList.remove("hidden");
+        inviasSearchResults.querySelectorAll(".invias-result-item").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const r = results[Number(btn.dataset.index)];
+            const form = document.getElementById("newBridgeForm");
+            if (r.nombre) form.name.value = r.nombre;
+            if (r.carretera) form.route.value = r.carretera;
+            if (r.via) form.routeCode.value = r.via;
+            if (r.latitude != null) form.latitude.value = r.latitude;
+            if (r.longitude != null) form.longitude.value = r.longitude;
+            if (r.luces != null) form.numberOfSpans.value = r.luces;
+            const yearMatch = /(\d{4})/.exec(r.fechaConstruccion || "");
+            if (yearMatch) form.constructionYear.value = yearMatch[1];
+            if (r.administrador) form.owner.value = r.administrador;
+            if (r.posteReferencia != null || r.distancia != null) {
+              const ref = `PR${r.posteReferencia ?? "?"}${r.distancia != null ? "+" + r.distancia + "m" : ""}`;
+              form.notes.value = `Importado del catálogo INVÍAS (datos.gov.co): ${ref}.${form.notes.value ? " " + form.notes.value : ""}`;
+            }
+            inviasSearchResults.classList.add("hidden");
+            inviasSearchInput.value = r.nombre || "";
+          });
+        });
+      }, 400);
+    });
+    document.addEventListener("click", (e) => {
+      if (!inviasSearchResults.contains(e.target) && e.target !== inviasSearchInput) {
+        inviasSearchResults.classList.add("hidden");
+      }
     });
 
     load();

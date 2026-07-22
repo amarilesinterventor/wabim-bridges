@@ -18,6 +18,7 @@ CREATE TYPE "InspectionPriority" AS ENUM ('LOW','MEDIUM','HIGH','URGENT');
 CREATE TYPE "CatalogSource" AS ENUM ('WABIM','INVIAS','EXTENSION');
 CREATE TYPE "MeasurementUnit" AS ENUM ('ML','M2','UNIDAD','PORCENTAJE','MM');
 CREATE TYPE "BridgeCondition" AS ENUM ('SIN_DETERIORO','DETERIORO_BAJO','DETERIORO_MODERADO','DETERIORO_MEDIO_ALTO','DETERIORO_ALTO');
+CREATE TYPE "PhotoKind" AS ENUM ('DAMAGE','PANORAMIC');
 
 -- --- Usuarios ------------------------------------------------------------------
 CREATE TABLE users (
@@ -41,7 +42,10 @@ CREATE TABLE bridges (
   latitude                      DOUBLE PRECISION,
   longitude                     DOUBLE PRECISION,
   route                         TEXT,
+  route_code                    TEXT,
+  concession                    BOOLEAN,
   km                            DOUBLE PRECISION,
+  skew                          DOUBLE PRECISION,
   structural_type_transverse    TEXT,
   structural_type_longitudinal  TEXT,
   number_of_spans               INTEGER,
@@ -82,6 +86,8 @@ CREATE TABLE inspections (
   notes          TEXT,
   inspector_id   TEXT REFERENCES users(id),
   coordinator_id TEXT REFERENCES users(id),
+  responsible_name       TEXT,
+  responsible_id_number  TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -191,6 +197,8 @@ CREATE TABLE photos (
   longitude             DOUBLE PRECISION,
   taken_at              TIMESTAMPTZ,
   annotations           JSONB,
+  kind                  "PhotoKind" NOT NULL DEFAULT 'DAMAGE',
+  inspection_id         TEXT REFERENCES inspections(id) ON DELETE CASCADE,
   inspection_element_id TEXT REFERENCES inspection_elements(id) ON DELETE CASCADE,
   pathology_record_id   TEXT REFERENCES pathology_records(id) ON DELETE CASCADE,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -29,6 +29,7 @@ import {
   getBridge,
   createBridge,
   createInspection,
+  updateInspectionResponsible,
   getInspection,
   addInspectionElement,
   addInspectionSubElement,
@@ -203,6 +204,42 @@ addRoute(
 );
 
 // ---------------------------------------------------------------------------
+// Rutas: Catálogo oficial de puentes INVÍAS (datos.gov.co, dataset nsdj-ep2p)
+// ---------------------------------------------------------------------------
+// Proxy de solo lectura al portal de datos abiertos: se consulta en vivo (sin
+// importar/cachear localmente) para no duplicar ni desactualizar el catálogo
+// oficial; el usuario elige un resultado y la app solo prellena el formulario
+// de registro de puente, dejando los campos editables para completar/corregir.
+const INVIAS_CATALOG_URL = "https://www.datos.gov.co/resource/nsdj-ep2p.json";
+
+addRoute("GET", "/api/invias-catalog/search", async (req, res, _params, _body) => {
+  const query = new URL(req.url ?? "", `http://localhost:${PORT}`).searchParams.get("q")?.trim();
+  if (!query) return sendJson(res, 200, { results: [] });
+  try {
+    const apiUrl = `${INVIAS_CATALOG_URL}?$q=${encodeURIComponent(query)}&$limit=15`;
+    const resp = await fetch(apiUrl);
+    if (!resp.ok) throw new Error(`INVÍAS respondió ${resp.status}`);
+    const rows = (await resp.json()) as any[];
+    const results = rows.map((r) => ({
+      nombre: r.nombre ?? null,
+      carretera: r.carretera ?? null,
+      via: r.via ?? null,
+      administrador: r.administrador ?? null,
+      luces: r.luces != null ? Number(r.luces) : null,
+      luzTotal: r.luz_total != null ? Number(r.luz_total) : null,
+      fechaConstruccion: r.fecha_de_construcci_n ?? null,
+      posteReferencia: r.poste_de_referencia ?? null,
+      distancia: r.distancia != null ? Number(r.distancia) : null,
+      latitude: r.point?.coordinates?.[1] ?? null,
+      longitude: r.point?.coordinates?.[0] ?? null,
+    }));
+    sendJson(res, 200, { results });
+  } catch (err: any) {
+    sendJson(res, 502, { error: `No se pudo consultar el catálogo INVÍAS: ${err.message ?? err}` });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Rutas: Puentes
 // ---------------------------------------------------------------------------
 addRoute("GET", "/api/bridges", (req, res) => sendJson(res, 200, { bridges: listBridges() }));
@@ -229,6 +266,11 @@ addRoute("POST", "/api/bridges/:id/inspections", (req, res, params, body) => {
 addRoute("GET", "/api/inspections/:id", (req, res, params) => {
   const inspection = getInspection(params.id);
   if (!inspection) return sendJson(res, 404, { error: "Inspección no encontrada." });
+  sendJson(res, 200, { inspection });
+});
+
+addRoute("PATCH", "/api/inspections/:id", (req, res, params, body) => {
+  const inspection = updateInspectionResponsible(params.id, body);
   sendJson(res, 200, { inspection });
 });
 
@@ -273,6 +315,24 @@ addRoute("POST", "/api/inspection-elements/:id/photos", async (req, res, params,
       caption: body.caption,
       inspectionElementId: params.id,
       pathologyRecordId: body.pathologyRecordId || null,
+    });
+    sendJson(res, 201, { photo });
+  } catch (err: any) {
+    sendJson(res, 400, { error: err.message ?? String(err) });
+  }
+});
+
+// Fotos panorámicas: vista general de la estructura, ligadas directamente a
+// la inspección (sin elemento/patología) — para el registro documental y la
+// portada del informe PDF, a diferencia de las fotos de daño puntual arriba.
+addRoute("POST", "/api/inspections/:id/photos", async (req, res, params, body) => {
+  try {
+    const url = await saveDataUrlPhoto(body.dataUrl, params.id);
+    const photo = addPhoto({
+      url,
+      caption: body.caption,
+      inspectionId: params.id,
+      kind: "PANORAMIC",
     });
     sendJson(res, 201, { photo });
   } catch (err: any) {

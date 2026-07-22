@@ -66,8 +66,11 @@ model Bridge {
   department        String
   latitude          Float?
   longitude         Float?
-  route             String? // Código de vía INVÍAS
+  route             String? // Nombre de la vía (Anexo A INVÍAS)
+  routeCode         String? // Código de la vía (Anexo A INVÍAS)
+  concession        Boolean? // Vía en concesión (Anexo A INVÍAS)
   km                Float? // Punto de referencia (abscisa)
+  skew              Float? // Esviajamiento, en grados (Anexo A INVÍAS)
   structuralTypeTransverse String? // Tabla 2 Manual INVÍAS (Losa sobre vigas, Armadura, Arco, etc.)
   structuralTypeLongitudinal String? // Tabla 3 Manual INVÍAS (simplemente apoyadas, continuas, colgante, etc.)
   numberOfSpans     Int?
@@ -138,12 +141,19 @@ model Inspection {
   coordinatorId  String?
   coordinator    User?   @relation("CoordinatorInspections", fields: [coordinatorId], references: [id])
 
+  // Persona que efectivamente levantó/firmó el informe en campo (Anexo A
+  // INVÍAS, campo "LEVANTÓ"); puede diferir del inspector asignado en el
+  // sistema, por eso se captura como texto libre + cédula, no como FK a User.
+  responsibleName     String?
+  responsibleIdNumber String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   elements        InspectionElement[]
   subCategoryResults SubCategoryResult[]
   result          InspectionResult?
+  photos          Photo[] // fotografías panorámicas generales de la estructura (kind = PANORAMIC)
 
   @@index([bridgeId])
   @@map("inspections")
@@ -320,6 +330,11 @@ model PathologyRecord {
 // Registro fotográfico
 // -----------------------------------------------------------------------------
 
+enum PhotoKind {
+  DAMAGE // foto de un daño puntual, ligada a un elemento y/o patología
+  PANORAMIC // foto panorámica general de la estructura, ligada solo a la inspección
+}
+
 model Photo {
   id                   String   @id @default(cuid())
   url                  String
@@ -328,7 +343,10 @@ model Photo {
   longitude            Float?
   takenAt              DateTime?
   annotations          String? // JSON con flechas/círculos/etiquetas (editor cliente)
+  kind                 PhotoKind @default(DAMAGE)
 
+  inspectionId         String?
+  inspection           Inspection?        @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   inspectionElementId  String?
   inspectionElement    InspectionElement? @relation(fields: [inspectionElementId], references: [id], onDelete: Cascade)
   pathologyRecordId    String?

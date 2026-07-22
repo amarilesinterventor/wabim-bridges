@@ -146,6 +146,58 @@ function addLogosHeader(doc: Doc) {
   doc.fillColor("#0f172a");
 }
 
+/**
+ * Foto panorámica de la estructura (si la inspección tiene alguna) como
+ * banner de portada, con el nombre/código del puente superpuesto sobre una
+ * franja semitransparente — para un informe con identidad visual propia de
+ * cada puente en vez de una plantilla genérica de solo texto.
+ */
+function addPanoramicBanner(doc: Doc, photoUrl: string, bridge: any): boolean {
+  const filePath = join(PUBLIC_DIR, photoUrl);
+  if (!existsSync(filePath)) return false;
+  try {
+    const bannerHeight = 170;
+    ensureSpace(doc, bannerHeight + 20);
+    doc.x = PAGE_MARGIN;
+    const y = doc.y;
+    // `cover` escala la imagen para llenar el recuadro pero NO la recorta —
+    // sin un clip explícito, el sobrante se dibuja fuera del recuadro y puede
+    // superponerse con el contenido de arriba/abajo (se detectó visualmente
+    // como el título superpuesto con el banner).
+    doc.save();
+    doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, bannerHeight).clip();
+    doc.image(filePath, PAGE_MARGIN, y, { width: CONTENT_WIDTH, height: bannerHeight, cover: [CONTENT_WIDTH, bannerHeight], align: "center", valign: "center" });
+    doc.restore();
+    doc.rect(PAGE_MARGIN, y, CONTENT_WIDTH, bannerHeight).lineWidth(1).strokeColor("#cbd5e1").stroke();
+
+    const barHeight = 34;
+    doc.save();
+    doc.fillOpacity(0.72);
+    doc.rect(PAGE_MARGIN, y + bannerHeight - barHeight, CONTENT_WIDTH, barHeight).fill("#0f172a");
+    doc.restore();
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(12).text(
+      bridge?.name ?? "—",
+      PAGE_MARGIN + 10,
+      y + bannerHeight - barHeight + 6,
+      { width: CONTENT_WIDTH - 20 },
+    );
+    doc.font("Helvetica").fontSize(8.5).fillColor("#e2e8f0").text(
+      `${bridge?.code ?? "—"} · ${bridge?.municipality ?? "—"}, ${bridge?.department ?? "—"}`,
+      PAGE_MARGIN + 10,
+      y + bannerHeight - barHeight + 20,
+      { width: CONTENT_WIDTH - 20 },
+    );
+
+    doc.y = y + bannerHeight + 12;
+    doc.x = PAGE_MARGIN;
+    doc.fillColor("#0f172a");
+    return true;
+  } catch {
+    // Si la foto no se puede leer/decodificar, se omite el banner sin romper el informe.
+    return false;
+  }
+}
+
 export function buildInspectionReportPdf(inspectionId: string): Doc {
   const insp = getInspection(inspectionId) as any;
   if (!insp) throw new Error(`Inspección no encontrada: ${inspectionId}`);
@@ -162,6 +214,9 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
   doc.fontSize(10).font("Helvetica").fillColor("#64748b").text("Metodología WABIM (Amariles-López & Osorio-Gómez, 2023) + Manual para la Inspección Visual de Puentes y Pontones, INVÍAS (2006)", PAGE_MARGIN, doc.y, { width: CONTENT_WIDTH });
   doc.moveDown(1);
 
+  const panoramicPhoto = (insp.panoramicPhotos as any[] | undefined)?.[0];
+  if (panoramicPhoto) addPanoramicBanner(doc, panoramicPhoto.url, bridge);
+
   // --- Datos generales del puente ---
   sectionTitle(doc, "Datos generales del puente");
   keyValueGrid(doc, [
@@ -176,7 +231,9 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
     ["Material", bridge?.material ?? "—"],
     ["Año de construcción", String(bridge?.construction_year ?? "—")],
     ["Propietario", bridge?.owner ?? "—"],
-    ["Ruta / Km", `${bridge?.route ?? "—"} / ${bridge?.km ?? "—"}`],
+    ["Nombre / Código de vía", `${bridge?.route ?? "—"} / ${bridge?.route_code ?? "—"}`],
+    ["Km (PR) / Esviajamiento", `${bridge?.km ?? "—"} / ${bridge?.skew != null ? bridge.skew + "°" : "—"}`],
+    ["Vía en concesión", bridge?.concession == null ? "—" : bridge.concession ? "Sí" : "No"],
   ]);
 
   // --- Datos de la inspección ---
@@ -188,6 +245,8 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
     ["Equipo utilizado", insp.equipment ?? "—"],
     ["Estado", insp.status ?? "—"],
     ["Prioridad", insp.priority ?? "—"],
+    ["Responsable (levantó)", insp.responsible_name ?? "—"],
+    ["Cédula del responsable", insp.responsible_id_number ?? "—"],
   ]);
   if (insp.notes) {
     doc.x = PAGE_MARGIN;
@@ -270,6 +329,9 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
 
   // --- Registro fotográfico ---
   const photoEntries: Array<{ url: string; caption: string }> = [];
+  for (const p of (insp.panoramicPhotos as any[]) ?? []) {
+    photoEntries.push({ url: p.url, caption: "Vista panorámica de la estructura" });
+  }
   for (const el of insp.elements as any[]) {
     for (const p of el.photos ?? []) {
       photoEntries.push({ url: p.url, caption: `${el.elementDef.name}${el.label ? " — " + el.label : ""}` });

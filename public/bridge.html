@@ -71,6 +71,8 @@
             <div><div class="text-slate-400 text-xs">Propietario</div><div>${escapeHtml(bridge.owner || "—")}</div></div>
             <div><div class="text-slate-400 text-xs">Coordenadas</div><div>${bridge.latitude ?? "—"}, ${bridge.longitude ?? "—"}</div></div>
             <div><div class="text-slate-400 text-xs"># de luces</div><div>${bridge.number_of_spans ?? "—"}</div></div>
+            <div><div class="text-slate-400 text-xs">Vía</div><div>${escapeHtml(bridge.route || "—")}${bridge.route_code ? " (" + escapeHtml(bridge.route_code) + ")" : ""}</div></div>
+            <div><div class="text-slate-400 text-xs">Concesión / Esviajamiento</div><div>${bridge.concession == null ? "—" : bridge.concession ? "Sí" : "No"} / ${bridge.skew ?? "—"}°</div></div>
           </div>
           ${bridge.notes ? `<div class="mt-4 text-sm text-slate-600 bg-slate-50 rounded-lg p-3">${escapeHtml(bridge.notes)}</div>` : ""}
         </div>

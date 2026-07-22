@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS bridges (
   latitude                      REAL,
   longitude                     REAL,
   route                         TEXT,
+  route_code                    TEXT,
+  concession                    INTEGER,
   km                            REAL,
+  skew                          REAL,
   structural_type_transverse    TEXT,
   structural_type_longitudinal  TEXT,
   number_of_spans               INTEGER,
@@ -68,6 +71,8 @@ CREATE TABLE IF NOT EXISTS inspections (
   notes          TEXT,
   inspector_id   TEXT REFERENCES users(id),
   coordinator_id TEXT REFERENCES users(id),
+  responsible_name       TEXT,
+  responsible_id_number  TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -165,6 +170,9 @@ CREATE TABLE IF NOT EXISTS pathology_records (
   created_at                TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- `kind` distingue las fotos panorámicas generales de la estructura (ligadas
+-- directamente a la inspección vía inspection_id, sin elemento/patología) de
+-- las fotos de daño puntual (ligadas a inspection_element_id / pathology_record_id).
 CREATE TABLE IF NOT EXISTS photos (
   id                    TEXT PRIMARY KEY,
   url                   TEXT NOT NULL,
@@ -173,6 +181,8 @@ CREATE TABLE IF NOT EXISTS photos (
   longitude             REAL,
   taken_at              TEXT,
   annotations           TEXT,
+  kind                  TEXT NOT NULL DEFAULT 'DAMAGE',
+  inspection_id         TEXT REFERENCES inspections(id) ON DELETE CASCADE,
   inspection_element_id TEXT REFERENCES inspection_elements(id) ON DELETE CASCADE,
   pathology_record_id   TEXT REFERENCES pathology_records(id) ON DELETE CASCADE,
   created_at            TEXT NOT NULL DEFAULT (datetime('now'))

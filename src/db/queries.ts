@@ -79,10 +79,10 @@ export function createBridge(payload: Record<string, any>) {
   const id = newId();
   db.prepare(`
     INSERT INTO bridges (
-      id, code, name, municipality, department, latitude, longitude, route, km,
+      id, code, name, municipality, department, latitude, longitude, route, route_code, concession, km, skew,
       structural_type_transverse, structural_type_longitudinal, number_of_spans,
       length, width, gauge, material, construction_year, owner, entity, notes, main_photo_url
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     payload.code,
@@ -92,7 +92,10 @@ export function createBridge(payload: Record<string, any>) {
     payload.latitude ?? null,
     payload.longitude ?? null,
     payload.route ?? null,
+    payload.routeCode ?? null,
+    payload.concession == null || payload.concession === "" ? null : payload.concession === true || payload.concession === "true" || payload.concession === "1" ? 1 : 0,
     payload.km ?? null,
+    payload.skew ?? null,
     payload.structuralTypeTransverse ?? null,
     payload.structuralTypeLongitudinal ?? null,
     payload.numberOfSpans ?? null,
@@ -114,8 +117,8 @@ export function createBridge(payload: Record<string, any>) {
 export function createInspection(bridgeId: string, payload: Record<string, any>) {
   const id = newId();
   db.prepare(`
-    INSERT INTO inspections (id, bridge_id, scheduled_date, executed_date, time, weather, equipment, status, priority, notes, inspector_id, coordinator_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO inspections (id, bridge_id, scheduled_date, executed_date, time, weather, equipment, status, priority, notes, inspector_id, coordinator_id, responsible_name, responsible_id_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     bridgeId,
@@ -129,6 +132,18 @@ export function createInspection(bridgeId: string, payload: Record<string, any>)
     payload.notes ?? null,
     payload.inspectorId ?? null,
     payload.coordinatorId ?? null,
+    payload.responsibleName ?? null,
+    payload.responsibleIdNumber ?? null,
+  );
+  return getInspection(id);
+}
+
+/** Nombre y cédula de quien levantó/firmó el informe en campo (Anexo A INVÍAS, campo "LEVANTÓ"). */
+export function updateInspectionResponsible(id: string, payload: { responsibleName?: string; responsibleIdNumber?: string }) {
+  db.prepare(`UPDATE inspections SET responsible_name = ?, responsible_id_number = ? WHERE id = ?`).run(
+    payload.responsibleName ?? null,
+    payload.responsibleIdNumber ?? null,
+    id,
   );
   return getInspection(id);
 }
@@ -156,8 +171,9 @@ export function getInspection(id: string) {
 
   const subCategoryResults = db.prepare(`SELECT * FROM subcategory_results WHERE inspection_id = ?`).all(id);
   const result = db.prepare(`SELECT * FROM inspection_results WHERE inspection_id = ?`).get(id) ?? null;
+  const panoramicPhotos = db.prepare(`SELECT * FROM photos WHERE inspection_id = ? AND kind = 'PANORAMIC'`).all(id) as any[];
 
-  return { ...inspection, bridge, elements, subCategoryResults, result };
+  return { ...inspection, bridge, elements, subCategoryResults, result, panoramicPhotos };
 }
 
 export function addInspectionElement(inspectionId: string, elementCode: string, label?: string) {
@@ -224,13 +240,23 @@ export function deletePathologyRecord(id: string) {
 export function addPhoto(payload: {
   url: string;
   caption?: string;
-  inspectionElementId: string;
+  inspectionElementId?: string | null;
   pathologyRecordId?: string | null;
+  inspectionId?: string | null;
+  kind?: string;
 }) {
   const id = newId();
   db.prepare(
-    `INSERT INTO photos (id, url, caption, inspection_element_id, pathology_record_id) VALUES (?, ?, ?, ?, ?)`,
-  ).run(id, payload.url, payload.caption ?? null, payload.inspectionElementId, payload.pathologyRecordId ?? null);
+    `INSERT INTO photos (id, url, caption, inspection_id, inspection_element_id, pathology_record_id, kind) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    payload.url,
+    payload.caption ?? null,
+    payload.inspectionId ?? null,
+    payload.inspectionElementId ?? null,
+    payload.pathologyRecordId ?? null,
+    payload.kind ?? "DAMAGE",
+  );
   return db.prepare(`SELECT * FROM photos WHERE id = ?`).get(id);
 }
 

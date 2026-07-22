@@ -315,6 +315,101 @@ function resolveSelectsWithOther(payload, fields) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Departamento / Municipio (Colombia) — <select> en cascada (ver /colombia.js)
+// ---------------------------------------------------------------------------
+
+/** Par de <select> Departamento -> Municipio, con "Otro (especificar)" para
+ * municipios/corregimientos no incluidos en el listado base. */
+function departmentCityFields() {
+  return `
+    <label class="col-span-1">Departamento
+      <select name="department" class="department-select mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+        <option value="">Selecciona...</option>
+        ${COLOMBIA_DEPARTMENTS.map((d) => `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`).join("")}
+      </select>
+    </label>
+    <label class="col-span-1">Municipio
+      <select name="municipality" class="municipality-select mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" disabled>
+        <option value="">Selecciona un departamento primero...</option>
+      </select>
+      <input type="text" name="municipalityOther" class="municipality-other-input other-input hidden mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Especifica el municipio..." />
+    </label>
+  `;
+}
+
+/** Conecta el comportamiento de departmentCityFields(); llamar tras insertar el HTML en el DOM. */
+function bindDepartmentCityFields(root = document) {
+  const deptSelect = root.querySelector(".department-select");
+  const citySelect = root.querySelector(".municipality-select");
+  const otherInput = root.querySelector(".municipality-other-input");
+  if (!deptSelect || !citySelect) return;
+  deptSelect.addEventListener("change", () => {
+    const dept = COLOMBIA_DEPARTMENTS.find((d) => d.name === deptSelect.value);
+    otherInput.classList.add("hidden");
+    otherInput.value = "";
+    if (!dept) {
+      citySelect.innerHTML = `<option value="">Selecciona un departamento primero...</option>`;
+      citySelect.disabled = true;
+      return;
+    }
+    citySelect.disabled = false;
+    citySelect.innerHTML =
+      `<option value="">Selecciona...</option>` +
+      dept.cities.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("") +
+      `<option value="${OTHER_VALUE}">Otro (especificar)</option>`;
+  });
+  citySelect.addEventListener("change", () => {
+    const isOther = citySelect.value === OTHER_VALUE;
+    otherInput.classList.toggle("hidden", !isOther);
+    if (!isOther) otherInput.value = "";
+  });
+}
+
+/** Antes de enviar el payload: resuelve "Otro" en el municipio, igual que resolveSelectsWithOther. */
+function resolveDepartmentCityFields(payload) {
+  if (payload.municipality === OTHER_VALUE) payload.municipality = payload.municipalityOther || "";
+  delete payload.municipalityOther;
+}
+
+// ---------------------------------------------------------------------------
+// Fotografías panorámicas — vista general de la estructura, ligadas a la
+// inspección (no a un elemento/patología puntual). Sirven para el registro
+// documental y como portada del informe PDF (ver reportPdf.ts).
+// ---------------------------------------------------------------------------
+
+function panoramicPhotoUploadControl() {
+  return `
+    <button type="button" id="addPanoramicPhotoBtn" class="bg-white border border-slate-300 hover:bg-slate-50 text-xs font-medium rounded-lg px-3 py-2">+ foto panorámica</button>
+    <input type="file" accept="image/*" capture="environment" class="hidden" id="panoramicPhotoInput" />
+  `;
+}
+
+/** Sube una foto panorámica (redimensionada) asociada directamente a la inspección. */
+async function uploadPanoramicPhoto(inspectionId, file, caption) {
+  const dataUrl = await resizeImageToDataUrl(file);
+  return api(`/inspections/${inspectionId}/photos`, {
+    method: "POST",
+    body: JSON.stringify({ dataUrl, caption: caption ?? null }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo oficial de puentes INVÍAS (datos.gov.co) — búsqueda para prellenar
+// el formulario de registro de puente.
+// ---------------------------------------------------------------------------
+
+async function searchInviasCatalog(query) {
+  const q = (query || "").trim();
+  if (q.length < 3) return [];
+  try {
+    const { results } = await api(`/invias-catalog/search?q=${encodeURIComponent(q)}`);
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
