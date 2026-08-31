@@ -31,9 +31,10 @@ sección [Roadmap](#roadmap--lo-que-falta-para-el-bms-completo).
 
 ## Nota sobre el entorno de generación (importante)
 
-El entorno en el que se generó este proyecto **no tuvo acceso a internet**
-(no se pudo hacer `npm install` de ningún paquete: ni Next.js, ni NestJS, ni
-Prisma, ni PostgreSQL gestionado, ni Tailwind CLI). Por eso:
+El entorno en el que se generó la primera versión de este proyecto **no tuvo
+acceso a internet** (no se pudo hacer `npm install` de ningún paquete: ni
+Next.js, ni NestJS, ni Prisma, ni PostgreSQL gestionado, ni Tailwind CLI). Por
+eso:
 
 * El servidor de demostración (`src/server`) es Node.js puro (módulo
   `http` nativo), sin ningún paquete externo — funciona con solo tener
@@ -41,8 +42,13 @@ Prisma, ni PostgreSQL gestionado, ni Tailwind CLI). Por eso:
 * La base de datos de demostración usa `node:sqlite` (nativo de Node ≥22.5)
   en vez de PostgreSQL — el **esquema relacional es idéntico** en su
   estructura (ver `prisma/schema.prisma` para PostgreSQL).
-* El frontend (`public/*.html`) es HTML/JS vanilla con TailwindCSS por CDN,
-  en vez de Next.js/React — no requiere paso de build.
+* El frontend (`public/*.html`) es HTML/JS vanilla con TailwindCSS, en vez de
+  Next.js/React. Desde que se tuvo acceso a internet en el entorno de
+  desarrollo se dejó de usar el CDN de Tailwind (`cdn.tailwindcss.com`) — que
+  en algunas redes/navegadores de los usuarios finales no cargaba y dejaba
+  toda la app sin estilos — y se compila localmente con la Tailwind CLI
+  (`npm run build:css`, ver `package.json`) a un archivo `public/tailwind.css`
+  servido por el propio servidor, sin depender de ningún recurso externo.
 * La autenticación usa tokens firmados con HMAC (`node:crypto`) en vez de
   una librería JWT — el formato de los claims es compatible con JWT real.
 

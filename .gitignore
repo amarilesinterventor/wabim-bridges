@@ -2,6 +2,7 @@ node_modules/
 dist/
 data/*.sqlite
 public/uploads/
+public/tailwind.css
 *.log
 .DS_Store
 .claude/settings.local.json

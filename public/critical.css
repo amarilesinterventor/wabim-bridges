@@ -1,8 +1,12 @@
 /* Reglas críticas de respaldo (no cosméticas): garantizan que el
-   comportamiento de mostrar/ocultar modales funcione incluso si, por
-   cualquier razón (sin conexión a internet, CDN bloqueado, etc.), el CDN
-   de Tailwind (https://cdn.tailwindcss.com) no llega a cargar. Tailwind
-   sigue siendo la fuente de todo el resto del estilo visual. */
+   comportamiento de mostrar/ocultar modales funcione incluso si /tailwind.css
+   no llega a cargar por cualquier razón. Desde que se dejó de depender del
+   CDN de Tailwind (https://cdn.tailwindcss.com) — que en algunas redes/
+   navegadores no cargaba y dejaba toda la app sin estilos — el CSS se
+   precompila en build time (ver "build:css" en package.json) y se sirve
+   desde el propio servidor como /tailwind.css, así que ya no depende de
+   ningún recurso externo. Tailwind sigue siendo la fuente de todo el resto
+   del estilo visual. */
 .hidden {
   display: none !important;
 }
