@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS inspections (
   coordinator_id TEXT REFERENCES users(id),
   responsible_name       TEXT,
   responsible_id_number  TEXT,
+  signature_url          TEXT,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

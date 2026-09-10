@@ -88,6 +88,7 @@ CREATE TABLE inspections (
   coordinator_id TEXT REFERENCES users(id),
   responsible_name       TEXT,
   responsible_id_number  TEXT,
+  signature_url          TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

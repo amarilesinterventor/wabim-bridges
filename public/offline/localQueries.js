@@ -88,7 +88,10 @@ export function getBridgePhotoUrls(bridgeId) {
              WHERE ie.inspection_id IN (SELECT id FROM inspections WHERE bridge_id = ?)
            )`,
   ).all(bridgeId, bridgeId, bridgeId);
-  return rows.map((r) => r.url);
+  const signatureRows = prepare(
+    `SELECT signature_url AS url FROM inspections WHERE bridge_id = ? AND signature_url IS NOT NULL`,
+  ).all(bridgeId);
+  return [...rows, ...signatureRows].map((r) => r.url);
 }
 
 export function deleteBridge(id) {
@@ -164,6 +167,11 @@ export function updateInspectionResponsible(id, payload) {
     payload.responsibleIdNumber ?? null,
     id,
   );
+  return getInspection(id);
+}
+
+export function updateInspectionSignature(id, signatureUrl) {
+  prepare(`UPDATE inspections SET signature_url = ? WHERE id = ?`).run(signatureUrl, id);
   return getInspection(id);
 }
 

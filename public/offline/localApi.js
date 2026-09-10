@@ -49,6 +49,9 @@ async function resolvePhotosIn(photos) {
 
 async function resolveInspectionPhotos(inspection) {
   if (!inspection) return inspection;
+  if (inspection.signature_url) {
+    inspection.signature_url = (await resolvePhotoUrl(inspection.signature_url)) ?? inspection.signature_url;
+  }
   await resolvePhotosIn(inspection.panoramicPhotos);
   for (const el of inspection.elements ?? []) {
     await resolvePhotosIn(el.photos);
@@ -119,6 +122,21 @@ const ROUTES = [
     return { inspection: await resolveInspectionPhotos(inspection) };
   }},
   { method: "PATCH", pattern: /^\/inspections\/([^/]+)$/, handler: async (m, body) => ({ inspection: q.updateInspectionResponsible(m[1], body) }) },
+  { method: "POST", pattern: /^\/inspections\/([^/]+)\/signature$/, handler: async (m, body) => {
+    const existing = q.getInspection(m[1]);
+    if (!existing) throw new Error("Inspección no encontrada.");
+    if (existing.signature_url) await deletePhotoFile(existing.signature_url);
+    const relPath = await savePhotoFile(body.dataUrl, m[1], `signature-${newId()}.png`);
+    const inspection = q.updateInspectionSignature(m[1], relPath);
+    return { inspection: await resolveInspectionPhotos(inspection) };
+  }},
+  { method: "DELETE", pattern: /^\/inspections\/([^/]+)\/signature$/, handler: async (m) => {
+    const existing = q.getInspection(m[1]);
+    if (!existing) throw new Error("Inspección no encontrada.");
+    if (existing.signature_url) await deletePhotoFile(existing.signature_url);
+    const inspection = q.updateInspectionSignature(m[1], null);
+    return { inspection };
+  }},
   { method: "POST", pattern: /^\/inspections\/([^/]+)\/elements$/, handler: async (m, body) => ({ id: q.addInspectionElement(m[1], body.elementCode, body.label) }) },
   { method: "DELETE", pattern: /^\/inspection-elements\/([^/]+)$/, handler: async (m) => { q.deleteInspectionElement(m[1]); return { ok: true }; } },
   { method: "POST", pattern: /^\/inspection-elements\/([^/]+)\/subelements$/, handler: async (m, body) => ({ id: q.addInspectionSubElement(m[1], body.subElementCode, Number(body.ic ?? 0), body.label) }) },

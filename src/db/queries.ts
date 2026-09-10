@@ -93,7 +93,10 @@ export function getBridgePhotoUrls(bridgeId: string): string[] {
              )`,
     )
     .all(bridgeId, bridgeId, bridgeId) as any[];
-  return rows.map((r) => r.url);
+  const signatureRows = db
+    .prepare(`SELECT signature_url AS url FROM inspections WHERE bridge_id = ? AND signature_url IS NOT NULL`)
+    .all(bridgeId) as any[];
+  return [...rows, ...signatureRows].map((r) => r.url);
 }
 
 /** Elimina el puente y, por cascada (ON DELETE CASCADE), sus inspecciones, elementos, patologías y fotos en base de datos. Los archivos de foto en disco deben borrarse aparte (ver getBridgePhotoUrls). */
@@ -171,6 +174,12 @@ export function updateInspectionResponsible(id: string, payload: { responsibleNa
     payload.responsibleIdNumber ?? null,
     id,
   );
+  return getInspection(id);
+}
+
+/** Firma manuscrita del responsable, capturada en un panel táctil (canvas -> PNG). */
+export function updateInspectionSignature(id: string, signatureUrl: string | null) {
+  db.prepare(`UPDATE inspections SET signature_url = ? WHERE id = ?`).run(signatureUrl, id);
   return getInspection(id);
 }
 

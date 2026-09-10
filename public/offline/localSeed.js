@@ -180,10 +180,32 @@ function persistInspectionInput(input, result) {
 }
 
 /** Corre una sola vez, cuando la base de datos local está recién creada (vacía). */
+/**
+ * Migración "del pobre" para instalaciones existentes de la app: a
+ * diferencia del servidor (donde basta con reiniciar la base de datos en
+ * desarrollo, y Render la reinicia sola en cada despliegue del nivel
+ * gratis), los datos de la app offline SÍ deben sobrevivir entre
+ * actualizaciones — así que las columnas nuevas que se agreguen después del
+ * primer lanzamiento se agregan aquí con ALTER TABLE, ignorando el error si
+ * ya existen (SQLite no tiene "ADD COLUMN IF NOT EXISTS").
+ */
+function ensureSchemaCurrent() {
+  const migrations = [`ALTER TABLE inspections ADD COLUMN signature_url TEXT`];
+  for (const sql of migrations) {
+    try {
+      exec(sql);
+    } catch {
+      // La columna ya existe (instalación nueva, que ya la trae de schema.sql) — se ignora.
+    }
+  }
+}
+
 export async function seedIfEmpty() {
   const hasSchema = prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='bridges'`).get();
   if (!hasSchema) {
     exec(await loadSchemaSql());
+  } else {
+    ensureSchemaCurrent();
   }
   const anyBridge = prepare(`SELECT id FROM bridges LIMIT 1`).get();
   if (anyBridge) return; // ya sembrada (o el usuario ya tiene datos propios)

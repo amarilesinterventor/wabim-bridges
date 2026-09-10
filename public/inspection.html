@@ -215,8 +215,11 @@
 
     // Persona que levantó/firmó el informe en campo (Anexo A INVÍAS, campo
     // "LEVANTÓ"): nombre + cédula, editable en línea y guardado vía PATCH.
+    let signaturePad = null;
+    let signatureEditing = false;
     function renderResponsible() {
       const el = document.getElementById("responsibleSection");
+      const showCanvas = signatureEditing || !inspection.signature_url;
       el.innerHTML = `
         <h3 class="text-sm font-semibold text-slate-700 mb-3">Responsable del informe</h3>
         <form id="responsibleForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm items-end">
@@ -228,6 +231,22 @@
           </label>
           <button type="submit" class="bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5 h-fit">Guardar</button>
         </form>
+
+        <div class="mt-5 pt-4 border-t border-slate-100">
+          <h4 class="text-sm font-semibold text-slate-700 mb-2">Firma del responsable</h4>
+          ${
+            showCanvas
+              ? `<canvas id="signatureCanvas" class="touch-none w-full max-w-md bg-white border border-slate-300 rounded-lg" style="height:150px"></canvas>
+                 <div class="flex gap-2 mt-2">
+                   <button type="button" id="clearSignatureBtn" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">Borrar</button>
+                   <button type="button" id="saveSignatureBtn" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white">Guardar firma</button>
+                   ${inspection.signature_url ? `<button type="button" id="cancelSignatureBtn" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">Cancelar</button>` : ""}
+                 </div>
+                 <p class="text-xs text-slate-400 mt-1">Firma con el dedo, lápiz óptico o el mouse.</p>`
+              : `<img src="${inspection.signature_url}" alt="Firma del responsable" class="h-24 max-w-md border border-slate-200 rounded-lg bg-white object-contain" />
+                 <div class="mt-2"><button type="button" id="redoSignatureBtn" class="text-xs text-indigo-600 hover:underline">Rehacer firma</button></div>`
+          }
+        </div>
       `;
       document.getElementById("responsibleForm").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -235,6 +254,35 @@
         await api(`/inspections/${inspectionId}`, { method: "PATCH", body: JSON.stringify(Object.fromEntries(fd.entries())) });
         await loadAll();
       });
+
+      if (showCanvas) {
+        signaturePad = setupSignaturePad(document.getElementById("signatureCanvas"));
+        document.getElementById("clearSignatureBtn").addEventListener("click", () => signaturePad.clear());
+        document.getElementById("cancelSignatureBtn")?.addEventListener("click", () => {
+          signatureEditing = false;
+          renderResponsible();
+        });
+        document.getElementById("saveSignatureBtn").addEventListener("click", async (e) => {
+          if (signaturePad.isEmpty()) {
+            alert("Todavía no hay ninguna firma dibujada.");
+            return;
+          }
+          const btn = e.target;
+          btn.disabled = true;
+          try {
+            await api(`/inspections/${inspectionId}/signature`, { method: "POST", body: JSON.stringify({ dataUrl: signaturePad.toDataUrl() }) });
+            signatureEditing = false;
+            await loadAll();
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      } else {
+        document.getElementById("redoSignatureBtn").addEventListener("click", () => {
+          signatureEditing = true;
+          renderResponsible();
+        });
+      }
     }
 
     // Fotografías panorámicas: vista general de la estructura (no ligadas a un

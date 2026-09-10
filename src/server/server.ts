@@ -32,6 +32,7 @@ import {
   getBridgePhotoUrls,
   createInspection,
   updateInspectionResponsible,
+  updateInspectionSignature,
   getInspection,
   addInspectionElement,
   addInspectionSubElement,
@@ -291,6 +292,42 @@ addRoute("GET", "/api/inspections/:id", (req, res, params) => {
 
 addRoute("PATCH", "/api/inspections/:id", (req, res, params, body) => {
   const inspection = updateInspectionResponsible(params.id, body);
+  sendJson(res, 200, { inspection });
+});
+
+// Firma manuscrita del responsable, capturada en un panel táctil (canvas ->
+// PNG en el navegador). Se guarda como archivo, igual que las fotos, en vez
+// de inline en la base de datos (consistente con el resto de imágenes).
+addRoute("POST", "/api/inspections/:id/signature", async (req, res, params, body) => {
+  try {
+    const existing = getInspection(params.id);
+    if (!existing) return sendJson(res, 404, { error: "Inspección no encontrada." });
+    if (existing.signature_url) {
+      try {
+        await unlink(join(PUBLIC_DIR, existing.signature_url));
+      } catch {
+        // La firma anterior ya no existe en disco; no es un error fatal.
+      }
+    }
+    const url = await saveDataUrlPhoto(body.dataUrl, params.id);
+    const inspection = updateInspectionSignature(params.id, url);
+    sendJson(res, 201, { inspection });
+  } catch (err: any) {
+    sendJson(res, 400, { error: err.message ?? String(err) });
+  }
+});
+
+addRoute("DELETE", "/api/inspections/:id/signature", async (req, res, params) => {
+  const existing = getInspection(params.id);
+  if (!existing) return sendJson(res, 404, { error: "Inspección no encontrada." });
+  if (existing.signature_url) {
+    try {
+      await unlink(join(PUBLIC_DIR, existing.signature_url));
+    } catch {
+      // El archivo ya no existe en disco; no es un error fatal.
+    }
+  }
+  const inspection = updateInspectionSignature(params.id, null);
   sendJson(res, 200, { inspection });
 });
 

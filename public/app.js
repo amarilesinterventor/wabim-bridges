@@ -321,6 +321,82 @@ async function uploadPhoto(inspectionElementId, file, { pathologyRecordId, capti
   });
 }
 
+// ---------------------------------------------------------------------------
+// Firma manuscrita del responsable — panel táctil (canvas) para capturarla
+// en campo, ya sea con el dedo/lápiz en un tablet/celular o con el mouse.
+// ---------------------------------------------------------------------------
+
+/**
+ * Conecta un <canvas> como panel de firma (Pointer Events: unifica mouse,
+ * touch y lápiz en un solo set de eventos). El <canvas> debe tener la clase
+ * "touch-none" (touch-action:none) para que dibujar no dispare el scroll de
+ * la página en móvil. Devuelve {clear(), isEmpty(), toDataUrl()}.
+ */
+function setupSignaturePad(canvas) {
+  const ratio = window.devicePixelRatio || 1;
+  const cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 300;
+  const cssHeight = canvas.clientHeight || 150;
+  // El tamaño en píxeles del canvas (width/height) es independiente de su
+  // tamaño en pantalla (CSS) — sin fijarlo explícitamente al tamaño real
+  // renderizado, el trazo queda borroso o con coordenadas desalineadas del
+  // dedo/cursor. Se escala por devicePixelRatio para que se vea nítido en
+  // pantallas de alta densidad (la mayoría de celulares/tablets).
+  canvas.width = cssWidth * ratio;
+  canvas.height = cssHeight * ratio;
+  canvas.style.width = cssWidth + "px";
+  canvas.style.height = cssHeight + "px";
+
+  const ctx = canvas.getContext("2d");
+  ctx.scale(ratio, ratio);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#1e293b";
+
+  let drawing = false;
+  let empty = true;
+
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    drawing = true;
+    empty = false;
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drawing) return;
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    e.preventDefault();
+  });
+  const stopDrawing = () => {
+    drawing = false;
+  };
+  canvas.addEventListener("pointerup", stopDrawing);
+  canvas.addEventListener("pointerleave", stopDrawing);
+  canvas.addEventListener("pointercancel", stopDrawing);
+
+  return {
+    clear() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      empty = true;
+    },
+    isEmpty() {
+      return empty;
+    },
+    toDataUrl() {
+      return canvas.toDataURL("image/png");
+    },
+  };
+}
+
 /** Galería compacta de miniaturas con botón de eliminar por foto. */
 function photoGallery(photos) {
   if (!photos || !photos.length) return "";

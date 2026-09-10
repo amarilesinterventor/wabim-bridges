@@ -146,6 +146,7 @@ model Inspection {
   // sistema, por eso se captura como texto libre + cédula, no como FK a User.
   responsibleName     String?
   responsibleIdNumber String?
+  signatureUrl        String? // firma manuscrita capturada en panel táctil (canvas -> PNG), ver public/offline/localApi.js y src/server/server.ts
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

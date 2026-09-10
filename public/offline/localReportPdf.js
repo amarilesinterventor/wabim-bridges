@@ -308,6 +308,7 @@ export async function buildInspectionReportPdfLocal(inspectionId) {
     await resolve(el.photos);
     for (const se of el.subElements) for (const pa of se.pathologies) await resolve(pa.photos);
   }
+  if (insp.signature_url) insp.signature_url = (await resolvePhotoUrl(insp.signature_url)) ?? insp.signature_url;
 
   // --- Encabezado ---
   await addLogosHeader(b);
@@ -359,6 +360,23 @@ export async function buildInspectionReportPdfLocal(inspectionId) {
     b.text("NOTAS", { size: 8, color: SLATE_400 });
     b.text(insp.notes, { size: 10, color: INK });
     b.y += 6;
+  }
+  if (insp.signature_url) {
+    try {
+      b.ensureSpace(90);
+      b.text("FIRMA DEL RESPONSABLE", { size: 8, color: SLATE_400 });
+      const y = b.y + 2;
+      const bytes = await fetchBytes(insp.signature_url);
+      const img = await embedImageAuto(pdfDoc, bytes, insp.signature_url);
+      const scale = Math.min(180 / img.width, 60 / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      b.page.drawImage(img, { x: PAGE_MARGIN, y: PAGE_HEIGHT - y - h, width: w, height: h });
+      b.page.drawLine({ start: { x: PAGE_MARGIN, y: PAGE_HEIGHT - y - 64 }, end: { x: PAGE_MARGIN + 180, y: PAGE_HEIGHT - y - 64 }, color: SLATE_300, thickness: 1 });
+      b.y = y + 64 + 12;
+    } catch {
+      // Si la firma no se puede leer/decodificar, se omite sin interrumpir el informe.
+    }
   }
 
   // --- Resultado WABIM ---

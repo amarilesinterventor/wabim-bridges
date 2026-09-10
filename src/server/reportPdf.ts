@@ -300,6 +300,22 @@ export function buildInspectionReportPdf(inspectionId: string): Doc {
     doc.moveDown(0.5);
     doc.x = PAGE_MARGIN;
   }
+  if (insp.signature_url) {
+    const filePath = join(PUBLIC_DIR, insp.signature_url);
+    if (existsSync(filePath)) {
+      try {
+        ensureSpace(doc, 90);
+        doc.fontSize(8).fillColor("#94a3b8").text("FIRMA DEL RESPONSABLE", PAGE_MARGIN, doc.y, { width: CONTENT_WIDTH });
+        const y = doc.y + 2;
+        doc.image(filePath, PAGE_MARGIN, y, { fit: [180, 60] });
+        doc.moveTo(PAGE_MARGIN, y + 64).lineTo(PAGE_MARGIN + 180, y + 64).strokeColor("#cbd5e1").stroke();
+        doc.y = y + 64 + 12;
+        doc.x = PAGE_MARGIN;
+      } catch {
+        // Si la firma no se puede leer/decodificar, se omite sin interrumpir el informe.
+      }
+    }
+  }
 
   // --- Resultado WABIM ---
   const result = insp.result;
