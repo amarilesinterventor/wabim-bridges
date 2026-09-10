@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>Inventario de Puentes — Inspección Visual de Puentes y Pontones WABIM</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <link rel="stylesheet" href="/tailwind.css" />
 <link rel="stylesheet" href="/critical.css" />
 </head>
@@ -46,6 +46,10 @@
         <div id="departmentCityFields" class="contents"></div>
         <label class="col-span-1">Latitud<input name="latitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
         <label class="col-span-1">Longitud<input name="longitude" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+        <div class="col-span-2 -mt-2 flex items-center gap-2">
+          <button type="button" id="useGpsBtn" class="text-xs text-indigo-600 hover:underline">📍 Usar mi ubicación (GPS)</button>
+          <span id="gpsStatus" class="text-xs text-slate-400"></span>
+        </div>
         <label class="col-span-1">Nombre de la vía <span class="text-slate-400 text-xs">Anexo A INVÍAS</span><input name="route" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
         <label class="col-span-1">Código de la vía <span class="text-slate-400 text-xs">Anexo A INVÍAS</span><input name="routeCode" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
         <label class="col-span-1">Kilómetro (PR)<input name="km" type="number" step="any" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
@@ -155,6 +159,26 @@
 
     document.getElementById("newBridgeBtn").addEventListener("click", () => {
       openModal(document.getElementById("newBridgeModal"));
+    });
+    document.getElementById("useGpsBtn").addEventListener("click", async (e) => {
+      const btn = e.target;
+      const status = document.getElementById("gpsStatus");
+      btn.disabled = true;
+      status.textContent = "Obteniendo ubicación…";
+      status.className = "text-xs text-slate-400";
+      try {
+        const { latitude, longitude } = await getGpsCoordinates();
+        const form = document.getElementById("newBridgeForm");
+        form.latitude.value = latitude.toFixed(6);
+        form.longitude.value = longitude.toFixed(6);
+        status.textContent = "Ubicación capturada.";
+        status.className = "text-xs text-green-600";
+      } catch (err) {
+        status.textContent = err.message;
+        status.className = "text-xs text-red-500";
+      } finally {
+        btn.disabled = false;
+      }
     });
     document.getElementById("cancelNewBridge").addEventListener("click", () => {
       closeModal(document.getElementById("newBridgeModal"));

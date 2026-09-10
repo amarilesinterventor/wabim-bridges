@@ -64,6 +64,19 @@ async function resolveInspectionPhotos(inspection) {
   return inspection;
 }
 
+// --- Catálogo INVÍAS (copia local para búsqueda sin conexión) --------------
+
+let inviasCatalogPromise = null;
+function loadInviasCatalog() {
+  if (!inviasCatalogPromise) {
+    inviasCatalogPromise = fetch("/offline/invias-catalog.json").then((res) => {
+      if (!res.ok) throw new Error("No se pudo cargar el catálogo INVÍAS local.");
+      return res.json();
+    });
+  }
+  return inviasCatalogPromise;
+}
+
 // --- Subida de fotos (comparte lógica entre las dos rutas de fotos) --------
 
 async function uploadPhoto(dataUrl, subdir, extra) {
@@ -95,9 +108,24 @@ const ROUTES = [
   { method: "PUT", pattern: /^\/catalog\/subelements\/([^/]+)$/, handler: async (m, body) => { requireAdmin(); q.updateSubElementIc(m[1], Number(body.ic)); return { ok: true }; } },
   { method: "PUT", pattern: /^\/catalog\/pathologies\/([^/]+)$/, handler: async (m, body) => { requireAdmin(); q.updatePathologyThresholds(m[1], Number(body.lowMax), Number(body.highMin)); return { ok: true }; } },
 
-  // Sin internet no hay forma de consultar datos.gov.co; se degrada a "sin resultados"
-  // en vez de fallar, igual que ya hace searchInviasCatalog() en app.js ante cualquier error.
-  { method: "GET", pattern: /^\/invias-catalog\/search$/, handler: async () => ({ results: [] }) },
+  // Búsqueda offline en una copia local del catálogo oficial INVÍAS
+  // (datos.gov.co, dataset nsdj-ep2p — ver public/offline/invias-catalog.json,
+  // 2830 registros al momento de descargarlo). No es "en vivo" como la ruta
+  // del servidor, así que puede quedar desactualizada frente al portal, pero
+  // permite buscar sin conexión, que es justamente el punto de esta app.
+  { method: "GET", pattern: /^\/invias-catalog\/search$/, handler: async (m, body, query) => {
+    const q2 = (query?.q || "").trim().toLowerCase();
+    if (q2.length < 3) return { results: [] };
+    const catalog = await loadInviasCatalog();
+    const results = catalog
+      .filter((r) =>
+        r.nombre?.toLowerCase().includes(q2) ||
+        r.carretera?.toLowerCase().includes(q2) ||
+        r.via?.toLowerCase().includes(q2),
+      )
+      .slice(0, 15);
+    return { results };
+  }},
 
   { method: "GET", pattern: /^\/bridges$/, handler: async () => ({ bridges: q.listBridges() }) },
   { method: "POST", pattern: /^\/bridges$/, handler: async (m, body) => ({ bridge: q.createBridge(body) }) },
@@ -165,14 +193,15 @@ const ROUTES = [
 export async function localApi(path, options = {}) {
   await ensureReady();
   const method = (options.method || "GET").toUpperCase();
-  const cleanPath = path.split("?")[0];
+  const [cleanPath, queryString] = path.split("?");
+  const query = Object.fromEntries(new URLSearchParams(queryString || ""));
   const body = options.body ? JSON.parse(options.body) : {};
 
   for (const route of ROUTES) {
     if (route.method !== method) continue;
     const m = route.pattern.exec(cleanPath);
     if (!m) continue;
-    return route.handler(m, body);
+    return route.handler(m, body, query);
   }
   throw new Error(`Ruta no disponible sin conexión: ${method} ${path}`);
 }

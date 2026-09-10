@@ -38,4 +38,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Coordenadas GPS al registrar un puente (ver @capacitor/geolocation en
+         public/app.js, getGpsCoordinates()). COARSE es respaldo si el
+         dispositivo/usuario solo concede ubicación aproximada. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>

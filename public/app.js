@@ -144,6 +144,42 @@ function bindReportPdfLinks(root = document) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// GPS — coordenadas desde el dispositivo, para el formulario de registro de
+// puente (public/index.html).
+// ---------------------------------------------------------------------------
+
+/**
+ * Obtiene {latitude, longitude} del dispositivo. En la app nativa usa
+ * @capacitor/geolocation (maneja el permiso de Android de forma correcta,
+ * a diferencia de la API de geolocalización del navegador dentro de un
+ * WebView, que suele fallar sin ese puente nativo); en la web normal (o si
+ * el plugin no está disponible) usa navigator.geolocation del navegador.
+ */
+async function getGpsCoordinates() {
+  try {
+    const { Capacitor, Geolocation } = await import("/vendor/capacitor-bundle.js");
+    if (Capacitor.isNativePlatform()) {
+      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
+      return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+    }
+  } catch {
+    // /vendor/capacitor-bundle.js no existe en el despliegue web (404) o el
+    // plugin no está disponible — se sigue con la API del navegador.
+  }
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Este dispositivo/navegador no soporta geolocalización."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      (err) => reject(new Error(err.message || "No se pudo obtener la ubicación.")),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  });
+}
+
 function renderNav(active) {
   const auth = getAuth();
   const el = document.getElementById("nav");
@@ -256,7 +292,7 @@ function barRow(label, pct, { sublabel } = {}) {
       <div class="w-40 sm:w-48 shrink-0 text-slate-600 truncate" title="${escapeHtml(label)}">
         ${escapeHtml(label)}${sublabel ? `<span class="text-slate-400"> ${escapeHtml(sublabel)}</span>` : ""}
       </div>
-      <div class="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden">
+      <div class="flex-1 h-5 bg-slate-200 border border-slate-300 rounded-full overflow-hidden">
         <div class="h-full rounded-full" style="width:${width}%;background-color:${color};"></div>
       </div>
       <div class="w-20 shrink-0 text-right font-medium text-slate-700 tabular-nums">${fmtPct(pct)}</div>

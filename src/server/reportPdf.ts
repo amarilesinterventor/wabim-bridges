@@ -107,7 +107,11 @@ function barRow(doc: Doc, label: string, pct: number, opts: { indent?: number; s
   doc.fontSize(9).fillColor("#334155").text(label + (opts.sub ? `  ${opts.sub}` : ""), PAGE_MARGIN + indent, y, { width: labelWidth });
 
   const barY = y + 1;
-  doc.roundedRect(barX, barY, barWidth, 8, 3).fill("#e2e8f0");
+  // Relleno + trazo: solo con "#e2e8f0" (gris muy claro) de relleno, la parte
+  // sin colorear de la barra quedaba casi invisible sobre el fondo blanco del
+  // PDF, dando la impresión de que la barra no llegaba al 100%.
+  doc.roundedRect(barX, barY, barWidth, 8, 3).fill("#cbd5e1");
+  doc.roundedRect(barX, barY, barWidth, 8, 3).lineWidth(0.5).strokeColor("#94a3b8").stroke();
   const w = Math.max(3, (Math.max(0, Math.min(100, pct)) / 100) * barWidth);
   doc.roundedRect(barX, barY, w, 8, 3).fill(bandColor(pct));
 

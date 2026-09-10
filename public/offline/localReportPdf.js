@@ -175,7 +175,11 @@ function barRow(b, label, pct, { indent = 0, sub } = {}) {
   const afterLabelY = b.y;
 
   const barY = rowTop + 3;
-  b.rect(barX, barY, barWidth, 8, SLATE_200);
+  // Relleno + trazo: solo con SLATE_200 (gris muy claro) de relleno, la parte
+  // sin colorear de la barra quedaba casi invisible sobre el fondo blanco del
+  // PDF, dando la impresión de que la barra no llegaba al 100%.
+  b.rect(barX, barY, barWidth, 8, SLATE_300);
+  b.rectOutline(barX, barY, barWidth, 8, hexToRgb("#94a3b8"), 0.5);
   const w = Math.max(3, (Math.max(0, Math.min(100, pct)) / 100) * barWidth);
   b.rect(barX, barY, w, 8, bandColor(pct));
   b.page.drawText(fmtPct(pct), {

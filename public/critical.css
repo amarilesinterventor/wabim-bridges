@@ -45,3 +45,25 @@ body {
 .bg-black\/30 {
   background-color: rgba(0, 0, 0, 0.3) !important;
 }
+
+/* Área segura de pantalla (recorte/notch, barra de estado, barra de
+   navegación del sistema): desde Android 15 (SDK 35+, que es lo que compila
+   este proyecto) el modo "edge-to-edge" ya no se puede desactivar y el
+   WebView dibuja debajo de esas barras del sistema por defecto. Junto con
+   `viewport-fit=cover` en el <meta viewport> de cada página, env(safe-area-
+   inset-*) refleja el tamaño real de esas franjas — en la web normal (sin
+   recorte de pantalla) siempre valen 0 y no cambian nada.
+   La barra de navegación (#nav) usa relleno en vez de moverse: así su fondo
+   blanco sigue llegando hasta el borde real de arriba (como en cualquier
+   app nativa), pero su contenido (logo/menú) queda por debajo de la barra
+   de estado del sistema. El padding va en el propio elemento con position:
+   sticky — puesto en el <body> no funcionaría igual una vez la barra queda
+   "pegada" arriba al hacer scroll. */
+#nav {
+  padding-top: env(safe-area-inset-top);
+}
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}

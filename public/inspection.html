@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>Inspección — Inspección Visual de Puentes y Pontones WABIM</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <link rel="stylesheet" href="/tailwind.css" />
 <link rel="stylesheet" href="/critical.css" />
 </head>
@@ -31,7 +31,7 @@
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold text-slate-800">Elementos inspeccionados</h2>
       <div class="flex gap-2">
-        <button id="addElementBtn" class="bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5">+ Agregar elemento</button>
+        <button id="addElementBtn" disabled class="bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium rounded-lg px-4 py-2.5">+ Agregar elemento</button>
         <button id="calculateBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg px-4 py-2.5">Calcular WABIM</button>
       </div>
     </div>
@@ -58,7 +58,7 @@
           <select name="elementCode" id="elementCodeSelect" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></select>
         </label>
         <label class="block">Etiqueta / ubicación (opcional)
-          <input name="label" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="p.ej. Pila 1, Entrada" />
+          <div id="elementLabelFieldContainer"></div>
         </label>
         <div class="flex justify-end gap-2 mt-4">
           <button type="button" id="cancelAddElement" class="px-4 py-2 text-sm rounded-lg border border-slate-300">Cancelar</button>
@@ -376,18 +376,34 @@
           : "");
     }
 
+    // El botón "+ Agregar elemento" arranca deshabilitado (ver <button disabled>
+    // en el HTML) y solo se habilita aquí, una vez el catálogo ya está cargado:
+    // en la app offline, la primera carga (compilar el WASM de sql.js + sembrar
+    // el catálogo) puede tardar unos segundos en un celular real (mucho más que
+    // en un navegador de escritorio) — sin esto, un clic durante esa ventana
+    // abría el modal con el <select> todavía vacío.
     function populateElementSelect() {
+      if (!catalog) return;
       const select = document.getElementById("elementCodeSelect");
+      // Se arma con el API DOM (createElement/append) en vez de innerHTML:
+      // algunas versiones del WebView de Android han mostrado <select> vacíos
+      // en su selector nativo cuando <option>/<optgroup> se inyectan como
+      // string via innerHTML, aunque el DOM "tenga" los elementos — con
+      // createElement no hay ambigüedad de parseo.
+      select.textContent = "";
       const groups = groupElementsBySubcategory();
-      select.innerHTML = Object.entries(groups)
-        .map(
-          ([code, g]) => `
-        <optgroup label="${escapeHtml(g.name)}">
-          ${g.items.map((e) => `<option value="${e.code}">${escapeHtml(e.name)} (E.C.=${e.ec}${e.source !== "WABIM" ? ", " + e.source : ""})</option>`).join("")}
-        </optgroup>
-      `,
-        )
-        .join("");
+      for (const g of Object.values(groups)) {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = g.name;
+        for (const e of g.items) {
+          const option = document.createElement("option");
+          option.value = e.code;
+          option.textContent = `${e.name} (E.C.=${e.ec}${e.source !== "WABIM" ? ", " + e.source : ""})`;
+          optgroup.appendChild(option);
+        }
+        select.appendChild(optgroup);
+      }
+      document.getElementById("addElementBtn").disabled = false;
     }
 
     function renderElements() {
@@ -528,7 +544,11 @@
     }
 
     // --- Modales: agregar elemento ---
+    document.getElementById("elementCodeSelect").addEventListener("change", (e) => {
+      renderElementLabelField(e.target.value);
+    });
     document.getElementById("addElementBtn").addEventListener("click", () => {
+      renderElementLabelField(document.getElementById("elementCodeSelect").value);
       openModal(document.getElementById("addElementModal"));
     });
     document.getElementById("cancelAddElement").addEventListener("click", () => {
@@ -537,7 +557,9 @@
     document.getElementById("addElementForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      await api(`/inspections/${inspectionId}/elements`, { method: "POST", body: JSON.stringify(Object.fromEntries(fd.entries())) });
+      const payload = Object.fromEntries(fd.entries());
+      resolveSelectsWithOther(payload, [{ select: "label", other: "labelOther" }]);
+      await api(`/inspections/${inspectionId}/elements`, { method: "POST", body: JSON.stringify(payload) });
       closeModal(document.getElementById("addElementModal"));
       e.target.reset();
       await loadAll();
@@ -582,15 +604,23 @@
     // Ubicación: si el elemento tiene una convención cerrada del manual (Celda 1),
     // se muestra un <select> con esas opciones + "Otro"; si no, queda como texto
     // libre (p.ej. elementos de concreto/metálicos, que se identifican por esquema).
-    function renderLocationField(elementCode) {
+    // Se reutiliza tanto para la ubicación de cada patología como para la
+    // etiqueta/ubicación del elemento al agregarlo (mismo criterio del manual).
+    function renderLocationOptionsField(elementCode, containerId, fieldName, placeholder) {
       const options = LOCATION_OPTIONS_BY_ELEMENT[elementCode];
-      const container = document.getElementById("locationFieldContainer");
+      const container = document.getElementById(containerId);
       if (options?.length) {
-        container.innerHTML = selectWithOther("location", options, { placeholder: "Describe la ubicación..." });
+        container.innerHTML = selectWithOther(fieldName, options, { placeholder: "Describe la ubicación..." });
         bindSelectsWithOther(container);
       } else {
-        container.innerHTML = `<input type="text" name="location" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="Ubicación / identificación del elemento" />`;
+        container.innerHTML = `<input type="text" name="${fieldName}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" placeholder="${escapeHtml(placeholder)}" />`;
       }
+    }
+    function renderLocationField(elementCode) {
+      renderLocationOptionsField(elementCode, "locationFieldContainer", "location", "Ubicación / identificación del elemento");
+    }
+    function renderElementLabelField(elementCode) {
+      renderLocationOptionsField(elementCode, "elementLabelFieldContainer", "label", "p.ej. Pila 1, Entrada");
     }
 
     function openAddPathologyModal(inspectionSubElementId, subElementCode) {
