@@ -1,8 +1,17 @@
 node_modules/
+.npmrc
 dist/
 data/*.sqlite
 public/uploads/
 public/tailwind.css
+# Generados por "npm run build:offline" (ver package.json) a partir de
+# src/wabim/*.ts, src/db/schema.sql y node_modules/{pdf-lib,sql.js} — no se
+# versionan aquí por la misma razón que public/tailwind.css. La copia
+# "congelada" que sí queda versionada es la que usa el build de Android, en
+# android/app/src/main/assets/public/ (se actualiza con "npm run android:sync").
+public/db-schema.sql
+public/wabim/
+public/vendor/
 *.log
 .DS_Store
 .claude/settings.local.json

@@ -12,13 +12,24 @@
     "start": "node dist/server/server.js",
     "build": "npm run build:css && tsc -p tsconfig.json && mkdir -p dist/db && cp src/db/schema.sql dist/db/schema.sql",
     "build:css": "tailwindcss -i src/styles/tailwind.css -o public/tailwind.css --minify",
+    "build:offline": "tsc -p tsconfig.json && mkdir -p public/wabim public/vendor && cp dist/wabim/catalog.js dist/wabim/catalog.js.map dist/wabim/engine.js dist/wabim/engine.js.map dist/wabim/types.js dist/wabim/types.js.map public/wabim/ && cp src/db/schema.sql public/db-schema.sql && cp node_modules/pdf-lib/dist/pdf-lib.esm.min.js node_modules/sql.js/dist/sql-wasm.js node_modules/sql.js/dist/sql-wasm.wasm public/vendor/ && esbuild src/offline-entry.js --bundle --format=esm --platform=browser --outfile=public/vendor/capacitor-bundle.js",
     "seed": "tsx src/db/seed.ts",
     "seed:reset": "rm -f data/wabim.sqlite && npm run seed",
-    "test": "tsx --test src/wabim/*.test.ts"
+    "test": "tsx --test src/wabim/*.test.ts",
+    "android:sync": "npm run build:css && npm run build:offline && npx cap sync android",
+    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/share": "^8.0.1",
     "@types/node": "^22.10.0",
     "@types/pdfkit": "^0.17.6",
+    "esbuild": "^0.28.2",
+    "pdf-lib": "^1.17.1",
+    "sql.js": "^1.14.2",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

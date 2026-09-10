@@ -410,6 +410,8 @@ const MIME: Record<string, string> = {
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".ico": "image/x-icon",
+  ".wasm": "application/wasm",
+  ".sql": "text/plain; charset=utf-8",
 };
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {

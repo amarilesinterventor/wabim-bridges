@@ -30,7 +30,48 @@ function requireAuthOrRedirect() {
   return auth;
 }
 
+// ---------------------------------------------------------------------------
+// Modo offline (app Android empaquetada con Capacitor, sin servidor): si
+// corre dentro de la app nativa (o con ?offline=1, para poder probar toda
+// esta ruta desde un navegador de escritorio sin compilar el .apk — ver
+// public/offline/), api() resuelve contra la base de datos SQLite local
+// (public/offline/localApi.js) en vez de hacer fetch() a /api/*. El resto de
+// la aplicación (index/bridge/inspection/admin/login.html) no necesita saber
+// cuál de los dos está pasando: llaman a api(path, options) igual siempre.
+let _offlineModeCache = null;
+async function isOfflineMode() {
+  if (_offlineModeCache != null) return _offlineModeCache;
+  // sessionStorage hace que ?offline=1 se mantenga al navegar a otra página
+  // (un <a href> normal no arrastra el query string) — solo importa para
+  // probar esta ruta en un navegador de escritorio; en la app nativa real
+  // Capacitor.isNativePlatform() ya es true en cualquier página, sin esto.
+  if (new URLSearchParams(location.search).has("offline")) {
+    sessionStorage.setItem("wabim_offline_override", "1");
+  }
+  if (sessionStorage.getItem("wabim_offline_override") === "1") {
+    _offlineModeCache = true;
+    return true;
+  }
+  try {
+    const { Capacitor } = await import("/vendor/capacitor-bundle.js");
+    _offlineModeCache = Capacitor.isNativePlatform();
+  } catch {
+    _offlineModeCache = false; // /vendor/capacitor-bundle.js no existe en el despliegue web normal
+  }
+  return _offlineModeCache;
+}
+
+let _offlineApiPromise = null;
+function loadOfflineApi() {
+  if (!_offlineApiPromise) _offlineApiPromise = import("./offline/localApi.js");
+  return _offlineApiPromise;
+}
+
 async function api(path, options = {}) {
+  if (await isOfflineMode()) {
+    const { localApi } = await loadOfflineApi();
+    return localApi(path, options);
+  }
   const auth = getAuth();
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (auth?.token) headers.Authorization = `Bearer ${auth.token}`;
@@ -40,6 +81,67 @@ async function api(path, options = {}) {
     throw new Error(data.error || `Error ${res.status}`);
   }
   return data;
+}
+
+/**
+ * Genera y abre el informe PDF localmente (modo offline). Ver bindReportPdfLinks().
+ *
+ * En la app nativa (Capacitor) se guarda el PDF en el dispositivo y se abre
+ * el panel nativo "Compartir/Abrir con" (@capacitor/share): un WebView no
+ * trae un visor de PDF integrado como un navegador de escritorio, así que
+ * "abrir" el archivo ahí mismo no mostraría nada — el share sheet deja que
+ * el usuario lo abra con cualquier lector de PDF instalado, lo guarde, o lo
+ * envíe por correo/WhatsApp.
+ *
+ * En un navegador de escritorio (solo para probar este flujo sin compilar
+ * el .apk) se abre en una pestaña nueva. Esa pestaña se abre EN BLANCO de
+ * forma síncrona, antes de cualquier `await`: si se abre después de esperar
+ * a que el PDF termine de generarse, el navegador ya no lo asocia con el
+ * clic del usuario y lo bloquea como si fuera un pop-up.
+ */
+async function openOfflineReportPdf(inspectionId) {
+  const { localReportPdfBlob, isNativePlatform } = await loadOfflineApi();
+
+  if (isNativePlatform()) {
+    const blob = await localReportPdfBlob(inspectionId);
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => resolve(String(reader.result).split(",")[1]);
+      reader.readAsDataURL(blob);
+    });
+    const { Filesystem, Directory, Share } = await import("/vendor/capacitor-bundle.js");
+    const path = `informe-${inspectionId}.pdf`;
+    await Filesystem.writeFile({ path, data: base64, directory: Directory.Cache });
+    const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
+    await Share.share({ title: "Informe de inspección", url: uri });
+    return;
+  }
+
+  const win = window.open("", "_blank");
+  const blob = await localReportPdfBlob(inspectionId);
+  if (win) win.location.href = URL.createObjectURL(blob);
+}
+
+/**
+ * Los enlaces "Descargar informe PDF" apuntan a /api/inspections/:id/report.pdf
+ * (funciona tal cual en el despliegue web). En modo offline no hay servidor
+ * que responda esa URL, así que se intercepta el clic y se genera el PDF en
+ * el dispositivo. Llamar después de insertar cualquier `.report-pdf-link` en
+ * el DOM (ver bridge.html / inspection.html).
+ */
+function bindReportPdfLinks(root = document) {
+  root.querySelectorAll(".report-pdf-link").forEach((a) => {
+    a.addEventListener("click", async (e) => {
+      if (!(await isOfflineMode())) return; // deja el <a href> normal (servidor real)
+      e.preventDefault();
+      try {
+        await openOfflineReportPdf(a.dataset.inspectionId);
+      } catch (err) {
+        alert("No se pudo generar el informe PDF: " + err.message);
+      }
+    });
+  });
 }
 
 function renderNav(active) {

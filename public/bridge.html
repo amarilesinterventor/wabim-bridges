@@ -102,13 +102,14 @@
               </a>
               <div class="flex items-center gap-3">
                 ${badge}
-                <a href="/api/inspections/${i.id}/report.pdf" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline shrink-0">↓ PDF</a>
+                <a href="/api/inspections/${i.id}/report.pdf" target="_blank" rel="noopener" class="report-pdf-link text-xs text-indigo-600 hover:underline shrink-0" data-inspection-id="${i.id}">↓ PDF</a>
               </div>
             </div>
           </div>
         `;
         })
         .join("");
+      bindReportPdfLinks(listEl);
     }
 
     document.getElementById("newInspectionBtn").addEventListener("click", () => {

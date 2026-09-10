@@ -198,11 +198,13 @@
             </div>
           </div>
           <a href="/api/inspections/${inspectionId}/report.pdf" target="_blank" rel="noopener"
-             class="shrink-0 bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5 text-slate-700">
+             class="report-pdf-link shrink-0 bg-white border border-slate-300 hover:bg-slate-50 text-sm font-medium rounded-lg px-4 py-2.5 text-slate-700"
+             data-inspection-id="${inspectionId}">
             ↓ Descargar informe PDF
           </a>
         </div>
       `;
+      bindReportPdfLinks(document.getElementById("header"));
 
       renderResponsible();
       renderPanoramic();
