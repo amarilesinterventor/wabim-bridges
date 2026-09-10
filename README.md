@@ -102,6 +102,67 @@ Para tener persistencia real (que los datos no se borren), hay que pasar a
 un plan pago (~USD 7/mes) y agregar un disco — la plantilla comentada al
 final de `render.yaml` muestra cómo.
 
+## App Android offline (sin internet, sin servidor)
+
+Además de la app web (arriba), el proyecto incluye una versión empaquetada
+como app nativa de Android (`.apk`) que **no necesita conexión ni servidor
+en ningún momento** — ni siquiera en la primera instalación. Toda la lógica
+que normalmente vive en `src/server` (base de datos, cálculo WABIM, fotos,
+informe PDF) corre dentro del propio dispositivo — ver
+`public/offline/*.js` para el detalle de la arquitectura.
+
+**Qué funciona igual que la web:** inventario de puentes, inspecciones,
+patologías, cálculo WABIM (mismo motor, mismos resultados — verificado byte
+a byte contra la versión servidor), fotos (cámara o galería), informe PDF
+(mismo diseño), responsable del informe, eliminar puentes.
+
+**Limitación conocida:** la búsqueda en el catálogo oficial INVÍAS
+(datos.gov.co, al registrar un puente) necesita internet por definición —
+en la app offline simplemente no devuelve resultados, sin romper el
+formulario.
+
+### Requisitos para compilar el `.apk`
+
+- Node.js ≥ 22.5 (igual que para la app web).
+- JDK 21 y Android SDK (`platform-tools`, `platforms;android-35` o
+  superior, `build-tools;35.0.0` o superior) — configura `ANDROID_HOME` y
+  `JAVA_HOME`, o abre el proyecto en **Android Studio**, que los gestiona
+  automáticamente.
+- En Windows, configura `npm` para correr los scripts con Git Bash en vez
+  de `cmd.exe` (varios scripts usan sintaxis POSIX porque también deben
+  funcionar tal cual en el build de Linux de Render): crea un `.npmrc`
+  local (no versionado) con `script-shell=C:\\Program Files\\Git\\bin\\bash.exe`
+  (ajusta la ruta si Git está instalado en otro lugar).
+
+### Compilar
+
+```bash
+npm install
+npm run android:sync    # compila/copia el motor WABIM, sql.js, pdf-lib, etc. a public/ y los sincroniza al proyecto Android
+npm run android:build   # corre Gradle y genera el .apk (android/app/build/outputs/apk/debug/app-debug.apk)
+```
+
+O, para usar la interfaz gráfica de Android Studio en vez de la línea de
+comandos: `npm run android:sync` y luego `npx cap open android`.
+
+El `.apk` generado con `assembleDebug` está firmado con una clave de
+depuración (no apta para publicar en Google Play) pero se puede instalar
+directamente en cualquier dispositivo Android habilitando "Instalar apps de
+orígenes desconocidos" — suficiente para uso interno/piloto de campo. Para
+publicarla en Play Store hace falta generar una clave de firma propia y
+correr `assembleRelease` en su lugar (ver la
+[documentación de Android sobre firma de apps](https://developer.android.com/studio/publish/app-signing)).
+
+### Probar la lógica offline sin compilar el `.apk`
+
+Toda la capa de datos offline (`public/offline/*.js`) también corre en un
+navegador de escritorio normal — útil para iterar rápido sin pasar por
+Gradle en cada cambio. Con el servidor de desarrollo corriendo
+(`npm run dev`), abre `http://localhost:4000/login.html?offline=1`: la app
+usa la misma base de datos SQLite en el navegador (vía sql.js/WebAssembly,
+persistida en IndexedDB en vez de en el sistema de archivos del teléfono)
+en lugar de llamar al servidor.
+
 ### Pruebas unitarias del motor de cálculo
 
 ```bash
@@ -132,6 +193,13 @@ src/db/               Capa de persistencia de la DEMO (SQLite nativo)
 
 src/server/           Servidor HTTP de la demo (Node puro) + autenticación + API
 public/               Frontend vanilla (HTML/CSS/JS) de la demo
+  offline/              Capa de datos de la app Android offline (ver más abajo) —
+                        mismo SQL/lógica que src/db + src/server, pero en JS de
+                        navegador (sql.js) en vez de node:sqlite
+  wabim/, vendor/, db-schema.sql   Generados por "npm run build:offline" (no versionados)
+
+android/              Proyecto nativo generado por Capacitor (app Android offline)
+capacitor.config.ts   Configuración de Capacitor (appId, nombre, carpeta web)
 
 docs/                 ERD, manual técnico, manual de usuario
 ```
