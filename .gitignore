@@ -6,9 +6,10 @@ public/uploads/
 public/tailwind.css
 # Generados por "npm run build:offline" (ver package.json) a partir de
 # src/wabim/*.ts, src/db/schema.sql y node_modules/{pdf-lib,sql.js} — no se
-# versionan aquí por la misma razón que public/tailwind.css. La copia
-# "congelada" que sí queda versionada es la que usa el build de Android, en
-# android/app/src/main/assets/public/ (se actualiza con "npm run android:sync").
+# versionan aquí por la misma razón que public/tailwind.css. android/ (ver su
+# propio .gitignore) tampoco versiona su copia de public/ — "npm run
+# android:sync" siempre debe correr antes de compilar la app Android, tanto
+# aquí como en cualquier otra máquina que clone el repo.
 public/db-schema.sql
 public/wabim/
 public/vendor/
