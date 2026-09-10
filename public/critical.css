@@ -67,3 +67,18 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
+
+/* Evita el "doble toque = zoom" del navegador/WebView en botones y enlaces:
+   en una app táctil, un doble toque accidental (p.ej. al tocar dos veces
+   rápido un botón esperando respuesta) ampliaba toda la página, dejándola
+   "más grande que la pantalla" hasta que el usuario la reducía a mano.
+   A diferencia de bloquear el zoom por completo desde el <meta viewport>
+   (user-scalable=no) o desde el WebView nativo — que se probó y rompió el
+   popup nativo del <select> de "+ Agregar elemento" en Android — esta regla
+   solo quita el gesto de doble-toque; el pellizco para hacer zoom sigue
+   disponible como respaldo de accesibilidad y no toca ningún control nativo. */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
