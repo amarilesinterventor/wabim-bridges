@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>Inspección — Inspección Visual de Puentes y Pontones WABIM</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <link rel="stylesheet" href="/tailwind.css" />
 <link rel="stylesheet" href="/critical.css" />
 </head>
@@ -184,6 +184,39 @@
       const { inspection: insp } = await api(`/inspections/${inspectionId}`);
       inspection = insp;
       render();
+    }
+
+    // Antes, un fallo en cualquier paso de loadAll() (p.ej. no cargó el catálogo
+    // sin conexión) dejaba la pantalla a medio construir para siempre y sin
+    // ningún aviso — el síntoma reportado fue el botón "+ Agregar elemento",
+    // que solo se habilita dentro de render(), permanentemente deshabilitado
+    // sin explicación. Ahora cualquier error se muestra en pantalla (con el
+    // mensaje real) y se ofrece un botón para reintentar sin recargar toda la app.
+    async function loadAllSafe() {
+      try {
+        await withTimeout(loadAll(), 20000, "La carga de datos locales está tardando demasiado (más de 20s). Puede que la base de datos offline no haya podido iniciarse en este dispositivo.");
+        return true;
+      } catch (err) {
+        console.error("No se pudo cargar la inspección:", err);
+        showErrorBanner("No se pudo cargar la inspección: " + err.message);
+        const btn = document.getElementById("addElementBtn");
+        btn.disabled = false;
+        btn.textContent = "⟳ Reintentar carga";
+        btn.onclick = async () => {
+          btn.disabled = true;
+          btn.textContent = "Cargando…";
+          const ok = await loadAllSafe();
+          if (ok) {
+            btn.textContent = "+ Agregar elemento";
+            btn.onclick = null; // se restaura el manejador normal más abajo
+            document.getElementById("addElementBtn").addEventListener("click", () => {
+              renderElementLabelField(document.getElementById("elementCodeSelect").value);
+              openModal(document.getElementById("addElementModal"));
+            });
+          }
+        };
+        return false;
+      }
     }
 
     function render() {
@@ -689,8 +722,8 @@
       `;
     }
 
-    loadAll().then(() => {
-      if (inspection?.result) {
+    loadAllSafe().then((ok) => {
+      if (ok && inspection?.result) {
         // reconstruir un objeto de "result" ligero a partir de lo persistido para mostrar el detalle sin recalcular
         api(`/inspections/${inspectionId}/calculate`, { method: "POST" })
           .then(({ result }) => {

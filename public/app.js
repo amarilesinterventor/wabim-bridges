@@ -640,3 +640,71 @@ function closeModal(el) {
   el.classList.add("hidden");
   el.classList.remove("flex");
 }
+
+// ---------------------------------------------------------------------------
+// Red de seguridad de errores: en modo offline (APK), un fallo en cualquier
+// paso de la cadena "abrir base de datos local -> sembrar catálogo -> cargar
+// datos" antes se quedaba como una promesa rechazada sin manejar — la
+// pantalla parecía "cargando para siempre" (p.ej. el botón "+ Agregar
+// elemento" nunca se habilitaba) sin ningún mensaje, ni en pantalla ni forma
+// de saber qué pasó. Este banner atrapa CUALQUIER error no manejado (código
+// nuestro o de una librería) y lo muestra siempre, con estilos en línea para
+// no depender de que /tailwind.css haya cargado bien.
+// ---------------------------------------------------------------------------
+
+function showErrorBanner(message, { retry = true } = {}) {
+  let banner = document.getElementById("wabimErrorBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "wabimErrorBanner";
+    banner.style.cssText =
+      "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7f1d1d;color:#fff;" +
+      "padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));" +
+      "font:13px ui-sans-serif,system-ui,sans-serif;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 8px rgba(0,0,0,.3);";
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = "";
+  const text = document.createElement("div");
+  text.style.cssText = "flex:1;white-space:pre-wrap;word-break:break-word;";
+  text.textContent = "⚠ " + message;
+  banner.appendChild(text);
+  if (retry) {
+    const btn = document.createElement("button");
+    btn.textContent = "Reintentar";
+    btn.style.cssText = "flex-shrink:0;background:#fff;color:#7f1d1d;border:0;border-radius:6px;padding:6px 12px;font-weight:600;";
+    btn.addEventListener("click", () => window.location.reload());
+    banner.appendChild(btn);
+  }
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕";
+  closeBtn.setAttribute("aria-label", "Cerrar");
+  closeBtn.style.cssText = "flex-shrink:0;background:transparent;color:#fff;border:0;font-size:16px;line-height:1;padding:4px;";
+  closeBtn.addEventListener("click", () => banner.remove());
+  banner.appendChild(closeBtn);
+}
+
+/**
+ * Envuelve una promesa con un plazo máximo: si no se resuelve/rechaza a
+ * tiempo, se rechaza con `message` en su lugar. Necesario porque un cuelgue
+ * (una llamada al puente nativo de Capacitor que nunca responde, por
+ * ejemplo) no produce ningún error que el banner de arriba pueda atrapar —
+ * sin este límite, la pantalla queda "cargando" para siempre y sin aviso.
+ */
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+window.addEventListener("unhandledrejection", (e) => {
+  const message = e.reason?.message || String(e.reason || "Error desconocido.");
+  console.error("Error no manejado:", e.reason);
+  showErrorBanner("Ocurrió un problema y una parte de la pantalla puede no haber cargado: " + message);
+});
+window.addEventListener("error", (e) => {
+  if (!e.error) return; // errores de recursos (imagen/script que no cargó) también disparan "error", pero sin e.error — se ignoran aquí
+  console.error("Error no manejado:", e.error);
+  showErrorBanner("Ocurrió un problema y una parte de la pantalla puede no haber cargado: " + (e.error.message || String(e.error)));
+});
